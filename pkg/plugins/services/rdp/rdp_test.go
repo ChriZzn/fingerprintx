@@ -17,9 +17,9 @@ package rdp
 import (
 	"testing"
 
+	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/test"
 	"github.com/ory/dockertest/v3"
-	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
-	"github.com/praetorian-inc/fingerprintx/pkg/test"
 )
 
 func TestRDP(t *testing.T) {

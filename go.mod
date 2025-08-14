@@ -1,4 +1,4 @@
-module github.com/praetorian-inc/fingerprintx
+module github.com/chrizzn/fingerprintx
 
 go 1.21
 
@@ -10,6 +10,7 @@ require (
 	golang.org/x/crypto v0.33.0
 	golang.org/x/term v0.29.0
 )
+///TODO: IS Wappalzyergo needed??
 
 require (
 	github.com/kr/text v0.2.0 // indirect

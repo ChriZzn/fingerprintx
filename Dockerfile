@@ -13,7 +13,7 @@
 # limitations under the License.
 
 FROM golang:alpine AS builder
-RUN go install github.com/praetorian-inc/fingerprintx/cmd/fingerprintx@latest
+RUN go install github.com/chrizzn/fingerprintx/cmd/fingerprintx@latest
 
 FROM alpine:latest
 RUN apk -U upgrade --no-cache \

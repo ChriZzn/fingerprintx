@@ -17,9 +17,9 @@ package mqtt5
 import (
 	"testing"
 
+	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/test"
 	"github.com/ory/dockertest/v3"
-	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
-	"github.com/praetorian-inc/fingerprintx/pkg/test"
 )
 
 func TestMqtt5(t *testing.T) {

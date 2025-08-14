@@ -17,7 +17,7 @@ package dhcp
 import (
 	"testing"
 
-	"github.com/praetorian-inc/fingerprintx/pkg/test"
+	"github.com/chrizzn/fingerprintx/pkg/test"
 )
 
 func TestDHCP(t *testing.T) {
