@@ -47,7 +47,7 @@ func ScanTargets(targets []plugins.Target, config Config) ([]plugins.Service, er
 		results []plugins.Service
 		mu      sync.Mutex
 		wg      sync.WaitGroup
-		sem     = make(chan struct{}, config.Concurrency) // Limit to 20 concurrent scans
+		sem     = make(chan struct{}, 1000) // Limit to 20 concurrent scans
 	)
 
 	for _, target := range targets {
