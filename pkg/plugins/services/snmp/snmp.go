@@ -24,15 +24,15 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-const SNMP = "SNMP"
+const SNMP = "snmp"
 
-type SNMPPlugin struct{}
+type Plugin struct{}
 
 func init() {
-	plugins.RegisterPlugin(&SNMPPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (f *SNMPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	RequestID := []byte{0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x01, 0x00}
 	InitialConnectionPackage := []byte{
 		0x30, 0x29, // package length
@@ -64,26 +64,26 @@ func (f *SNMPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 	stringBegin := idx + InfoOffset
 	if bytes.Contains(response, RequestID) {
 		if stringBegin < len(response) {
-			return plugins.CreateServiceFrom(target, plugins.ServiceSNMP{}, false,
-				string(response[stringBegin:]), plugins.UDP), nil
+			//TODO: TYPE - string(response[stringBegin:])
+			return plugins.CreateServiceFrom(target, p.Name(), ServiceSNMP{}, nil), nil
 		}
-		return plugins.CreateServiceFrom(target, plugins.ServiceSNMP{}, false, "", plugins.UDP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), ServiceSNMP{}, nil), nil
 	}
 	return nil, nil
 }
 
-func (f *SNMPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return SNMP
 }
 
-func (f *SNMPPlugin) PortPriority(i uint16) bool {
-	return i == 161
-}
-
-func (f *SNMPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.UDP
 }
 
-func (f *SNMPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 81
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{161}
 }

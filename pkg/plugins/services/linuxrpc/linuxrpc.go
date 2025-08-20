@@ -49,28 +49,28 @@ Value follows: Yes
 Bytes are padded to 4 bytes
 */
 
-type RPCPlugin struct{}
+type Plugin struct{}
 
-const RPC = "RPC"
+const RPC = "rpc"
 
 func init() {
-	plugins.RegisterPlugin(&RPCPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *RPCPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	rpcService := plugins.ServiceRPC{}
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	rpcService := ServiceRPC{}
 
 	check, err := DetectRPCInfoService(conn, &rpcService, timeout)
 	if check && err != nil {
 		return nil, nil
 	}
 	if err == nil {
-		return plugins.CreateServiceFrom(target, rpcService, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), rpcService, nil), nil
 	}
 	return nil, err
 }
 
-func DetectRPCInfoService(conn net.Conn, lookupResponse *plugins.ServiceRPC, timeout time.Duration) (bool, error) {
+func DetectRPCInfoService(conn net.Conn, lookupResponse *ServiceRPC, timeout time.Duration) (bool, error) {
 	callPacket := []byte{
 		0x80, 0x00, 0x00, 0x28, 0x72, 0xfe, 0x1d, 0x13,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -116,7 +116,7 @@ func DetectRPCInfoService(conn net.Conn, lookupResponse *plugins.ServiceRPC, tim
 	return true, parseRPCInfo(response, lookupResponse)
 }
 
-func parseRPCInfo(response []byte, lookupResponse *plugins.ServiceRPC) error {
+func parseRPCInfo(response []byte, lookupResponse *ServiceRPC) error {
 	if len(response) < 0x20 {
 		return fmt.Errorf("invalid rpc length")
 	}
@@ -124,7 +124,7 @@ func parseRPCInfo(response []byte, lookupResponse *plugins.ServiceRPC) error {
 	valueFollows := 1
 
 	for valueFollows == 1 {
-		tmp := plugins.RPCB{}
+		tmp := RPCB{}
 		if len(response) < 0x20 {
 			return nil
 		}
@@ -164,18 +164,18 @@ func parseRPCInfo(response []byte, lookupResponse *plugins.ServiceRPC) error {
 	return nil
 }
 
-func (p *RPCPlugin) PortPriority(i uint16) bool {
-	return i == 111
-}
-
-func (p *RPCPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return RPC
 }
 
-func (p *RPCPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *RPCPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 300
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{111}
 }

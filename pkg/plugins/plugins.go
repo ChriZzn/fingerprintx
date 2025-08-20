@@ -42,13 +42,11 @@ func RegisterPlugin(p Plugin) {
 func (p Protocol) String() (s string) {
 	switch p {
 	case IP:
-		s = "IP"
+		s = "ip"
 	case TCP:
-		s = "TCP"
-	case TCPTLS:
-		s = "TCPTLS"
+		s = "tcp"
 	case UDP:
-		s = "UDP"
+		s = "udp"
 	default:
 		panic("No string name for protocol %d.")
 	}

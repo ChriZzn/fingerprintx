@@ -38,7 +38,7 @@ func TestOracleDB(t *testing.T) {
 		},
 	}
 
-	p := &ORACLEPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

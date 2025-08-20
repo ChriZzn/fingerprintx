@@ -12,41 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package kafkaold
+package scan
 
 import (
-	"testing"
+	"log"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	"github.com/chrizzn/fingerprintx/pkg/test"
-	"github.com/ory/dockertest/v3"
 )
 
-func TestKafkaOld(t *testing.T) {
-	testcases := []test.Testcase{
-		{
-			Description: "kafkaold",
-			Port:        9092,
-			Protocol:    plugins.TCP,
-			Expected: func(res *plugins.Service) bool {
-				return res != nil
-			},
-			RunConfig: dockertest.RunOptions{
-				Repository: "spotify/kafka",
-			},
-		},
+// Scan fingerprints service(s) running given a list of targets. (Entrypoint)
+func Scan(targets []plugins.Target, config Config) ([]plugins.Service, error) {
+	var results []plugins.Service
+
+	// Run a per Target Scan
+	for _, target := range targets {
+		result, err := config.RunTargetScan(target)
+		if err == nil && result != nil {
+			results = append(results, *result)
+		}
+		if config.Verbose && err != nil {
+			log.Printf("%s\n", err)
+		}
 	}
 
-	var p *Plugin
-
-	for _, tc := range testcases {
-		tc := tc
-		t.Run(tc.Description, func(t *testing.T) {
-			t.Parallel()
-			err := test.RunTest(t, tc, p)
-			if err != nil {
-				t.Errorf(err.Error())
-			}
-		})
-	}
+	return results, nil
 }

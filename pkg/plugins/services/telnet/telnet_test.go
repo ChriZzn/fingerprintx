@@ -37,7 +37,7 @@ func TestTelnet(t *testing.T) {
 		},
 	}
 
-	p := &TELNETPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

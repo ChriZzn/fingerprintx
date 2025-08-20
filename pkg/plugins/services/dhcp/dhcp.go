@@ -317,10 +317,10 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		for int(options[0]) != 255 {
 			if len(options) < int(options[1])+2 {
 				// packet corruption
-				payload := plugins.ServiceDHCP{
+				payload := ServiceDHCP{
 					Option: fmt.Sprintf("%s", optionList),
 				}
-				return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
+				return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 			}
 			c := int(options[0])
 			switch c {
@@ -349,34 +349,26 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 			}
 			options = options[2+int(options[1]):]
 		}
-		payload := plugins.ServiceDHCP{
+		payload := ServiceDHCP{
 			Option: fmt.Sprintf("%s", optionList),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	return nil, nil
-}
-
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 67
 }
 
 func (p *Plugin) Name() string {
 	return DHCP
 }
 
-func (p *Plugin) PortReject(u uint16) bool {
-	return u != 67
-}
-
-func (p *Plugin) SrcPort() uint16 {
-	return 67
+func (p *Plugin) Type() plugins.Protocol {
+	return plugins.UDP
 }
 
 func (p *Plugin) Priority() int {
 	return 100
 }
 
-func (p *Plugin) Type() plugins.Protocol {
-	return plugins.UDP
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{67}
 }

@@ -28,7 +28,7 @@ func TestHTTPS(t *testing.T) {
 		{
 			Description: "https",
 			Port:        8443,
-			Protocol:    plugins.TCPTLS,
+			Protocol:    plugins.TCP,
 			Expected: func(res *plugins.Service) bool {
 				return res != nil
 			},

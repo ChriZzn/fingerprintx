@@ -25,7 +25,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-const IPSEC = "IPsec"
+const IPSEC = "ipsec"
 
 type Plugin struct{}
 
@@ -33,7 +33,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (f *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	initiator := make([]byte, 8)
 	_, err := rand.Read(initiator)
 	if err != nil {
@@ -107,28 +107,28 @@ func (f *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	responderISP := hex.EncodeToString(response[8:16])
 	messageID := hex.EncodeToString(response[20:24])
 	if bytes.Equal(initiator, response[0:8]) {
-		payload := plugins.ServiceIPSEC{
+		payload := ServiceIPSEC{
 			ResponderISP: responderISP,
 			MessageID:    messageID,
 		}
 
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	return nil, nil
 }
 
-func (f *Plugin) PortPriority(i uint16) bool {
-	return i == 500
-}
-
-func (f *Plugin) Name() string {
+func (p *Plugin) Name() string {
 	return IPSEC
 }
 
-func (f *Plugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 198
 }
 
-func (f *Plugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.UDP
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{500}
 }

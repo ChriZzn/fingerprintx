@@ -37,7 +37,7 @@ func TestSSH(t *testing.T) {
 		},
 	}
 
-	p := &SSHPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

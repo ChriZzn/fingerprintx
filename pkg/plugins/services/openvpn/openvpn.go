@@ -24,7 +24,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-const OPENVPN = "OpenVPN"
+const OPENVPN = "openvpn"
 
 type Plugin struct{}
 
@@ -75,15 +75,12 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 				response[i:i+SessionIDLength],
 				InitialConnectionPackage[1:1+SessionIDLength],
 			) {
-				return plugins.CreateServiceFrom(target, plugins.ServiceOpenVPN{}, false, "", plugins.UDP), nil
+				//TODO: Missing SSL?
+				return plugins.CreateServiceFrom(target, p.Name(), ServiceOpenVPN{}, nil), nil
 			}
 		}
 	}
 	return nil, nil
-}
-
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 1194
 }
 
 func (p *Plugin) Name() string {
@@ -96,4 +93,8 @@ func (p *Plugin) Type() plugins.Protocol {
 
 func (p *Plugin) Priority() int {
 	return 708
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{1194}
 }

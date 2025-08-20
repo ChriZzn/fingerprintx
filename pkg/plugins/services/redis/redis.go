@@ -23,15 +23,13 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type REDISPlugin struct{}
-type REDISTLSPlugin struct{}
+type Plugin struct{}
 
 type Info struct {
 	AuthRequired bool
 }
 
 const REDIS = "redis"
-const REDISTLS = "redis"
 
 // Check if the response is from a Redis server
 // returns an error if it's not validated as a Redis server
@@ -71,23 +69,10 @@ func checkRedis(data []byte) (Info, error) {
 }
 
 func init() {
-	plugins.RegisterPlugin(&REDISPlugin{})
-	plugins.RegisterPlugin(&REDISTLSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *REDISPlugin) PortPriority(port uint16) bool {
-	return port == 6379
-}
-
-func (p *REDISTLSPlugin) PortPriority(port uint16) bool {
-	return port == 6380
-}
-
-func (p *REDISTLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	return DetectRedis(conn, target, timeout, true)
-}
-
-func DetectRedis(conn net.Conn, target plugins.Target, timeout time.Duration, tls bool) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	//https://redis.io/commands/ping/
 	// PING is a supported command since 1.0.0
 	// [*1(CR)(NL)$4(CR)(NL)PING(CR)(NL)]
@@ -120,39 +105,25 @@ func DetectRedis(conn net.Conn, target plugins.Target, timeout time.Duration, tl
 	if err != nil {
 		return nil, nil
 	}
-	payload := plugins.ServiceRedis{
+	payload := ServiceRedis{
 		AuthRequired: result.AuthRequired,
 	}
-	if tls {
-		return plugins.CreateServiceFrom(target, payload, true, "", plugins.TCPTLS), nil
-	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	//todo: ssl
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *REDISPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	return DetectRedis(conn, target, timeout, false)
-}
-
-func (p *REDISPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return REDIS
 }
 
-func (p *REDISTLSPlugin) Name() string {
-	return REDISTLS
-}
-
-func (p *REDISPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *REDISTLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
-}
-
-func (p *REDISPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 413
 }
 
-func (p *REDISTLSPlugin) Priority() int {
-	return 414
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{6379, 16379, 6380}
 }

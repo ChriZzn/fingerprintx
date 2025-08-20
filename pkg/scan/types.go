@@ -19,9 +19,6 @@ import (
 )
 
 type Config struct {
-	// UDP scan
-	UDP bool
-
 	FastMode bool
 
 	// The timeout specifies how long certain tasks should wait during the scanning process.

@@ -37,7 +37,7 @@ func TestFTP(t *testing.T) {
 		},
 	}
 
-	p := &FTPPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

@@ -37,7 +37,7 @@ func TestSMTP(t *testing.T) {
 		},
 	}
 
-	p := &SMTPPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

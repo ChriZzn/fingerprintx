@@ -38,7 +38,7 @@ func TestSNMP(t *testing.T) {
 		},
 	}
 
-	p := &SNMPPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

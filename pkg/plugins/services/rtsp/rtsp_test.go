@@ -38,7 +38,7 @@ func TestRtsp(t *testing.T) {
 		},
 	}
 
-	p := &RTSPPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

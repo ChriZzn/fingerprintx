@@ -24,23 +24,9 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type JDWPPlugin struct{}
+type Plugin struct{}
 
 const JDWP = "jdwp"
-
-var (
-	commonJDWPPorts = map[int]struct{}{
-		3999:  {},
-		5000:  {},
-		5005:  {},
-		8000:  {},
-		8453:  {},
-		8787:  {},
-		8788:  {},
-		9001:  {},
-		18000: {},
-	}
-)
 
 type JDWPPacket struct {
 	Length     uint32
@@ -51,11 +37,11 @@ type JDWPPacket struct {
 }
 
 func init() {
-	plugins.RegisterPlugin(&JDWPPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func DetectJDWPVersion(conn net.Conn, timeout time.Duration) (*plugins.ServiceJDWP, error) {
-	info := plugins.ServiceJDWP{}
+func DetectJDWPVersion(conn net.Conn, timeout time.Duration) (*ServiceJDWP, error) {
+	info := ServiceJDWP{}
 
 	versionRequest := JDWPPacket{
 		Length:     0x0B,
@@ -143,7 +129,7 @@ func DetectJDWPVersion(conn net.Conn, timeout time.Duration) (*plugins.ServiceJD
 	return &info, nil
 }
 
-func (p *JDWPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	requestBytes := []byte{
 		// ascii "JDWP-Handshake"
 		0x4a, 0x44, 0x57, 0x50, 0x2d, 0x48, 0x61, 0x6e, 0x64, 0x73, 0x68, 0x61, 0x6b, 0x65,
@@ -167,25 +153,24 @@ func (p *JDWPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 	}
 
 	if info == nil {
-		return plugins.CreateServiceFrom(target, nil, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), nil, nil), nil
 	}
-
-	return plugins.CreateServiceFrom(target, info, false, info.VMVersion, plugins.TCP), nil
+	//TODO: TYPE (info.VMVersion)
+	return plugins.CreateServiceFrom(target, p.Name(), info, nil), nil
 }
 
-func (p *JDWPPlugin) PortPriority(port uint16) bool {
-	_, ok := commonJDWPPorts[int(port)]
-	return ok
-}
-
-func (p *JDWPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return JDWP
 }
 
-func (p *JDWPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *JDWPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 500
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{3999, 5000, 5005, 8000, 8453, 8787, 8788, 9001, 18000}
 }

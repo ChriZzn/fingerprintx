@@ -37,7 +37,7 @@ func TestVNC(t *testing.T) {
 		},
 	}
 
-	p := &VNCPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

@@ -27,13 +27,13 @@ var ftpResponse = regexp.MustCompile(`^\d{3}[- ](.*)\r`)
 
 const FTP = "ftp"
 
-type FTPPlugin struct{}
+type Plugin struct{}
 
 func init() {
-	plugins.RegisterPlugin(&FTPPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *FTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	response, err := utils.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -47,25 +47,25 @@ func (p *FTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 		return nil, nil
 	}
 
-	payload := plugins.ServiceFTP{
+	payload := ServiceFTP{
 		Banner: string(response),
 	}
 
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *FTPPlugin) PortPriority(i uint16) bool {
-	return i == 21
-}
-
-func (p *FTPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return FTP
 }
 
-func (p *FTPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *FTPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 10
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{21}
 }

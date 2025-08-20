@@ -96,9 +96,10 @@ func openConnection(target string, mode plugins.Protocol) (net.Conn, error) {
 	switch mode {
 	case plugins.UDP:
 		return net.Dial("udp", target)
+
 	case plugins.TCP:
 		return net.Dial("tcp", target)
-	case plugins.TCPTLS:
+	case plugins.TCP:
 		return tls.DialWithDialer(&net.Dialer{}, "tcp", target, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec
 	default:
 		return nil, fmt.Errorf("invalid protocol")

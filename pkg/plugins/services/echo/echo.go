@@ -24,7 +24,7 @@ import (
 	"github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type EchoPlugin struct{}
+type Plugin struct{}
 
 const ECHO = "echo"
 
@@ -47,30 +47,30 @@ func isEcho(conn net.Conn, timeout time.Duration) (bool, error) {
 }
 
 func init() {
-	plugins.RegisterPlugin(&EchoPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *EchoPlugin) PortPriority(port uint16) bool {
-	return port == 7
-}
-
-func (p *EchoPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	if isEcho, err := isEcho(conn, timeout); !isEcho || err != nil {
 		return nil, nil
 	}
-	payload := plugins.ServiceEcho{}
+	payload := ServiceEcho{}
 
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *EchoPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return ECHO
 }
 
-func (p *EchoPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *EchoPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 1
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{7}
 }

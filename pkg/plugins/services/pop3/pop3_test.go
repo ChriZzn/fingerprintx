@@ -38,7 +38,7 @@ func TestPOP3(t *testing.T) {
 		},
 	}
 
-	p := &POP3Plugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

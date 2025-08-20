@@ -43,7 +43,7 @@ type OptionToken struct {
 	PLOptionData   []byte // the raw data associated with the option
 }
 
-type MSSQLPlugin struct{}
+type Plugin struct{}
 
 type Data struct {
 	Version string
@@ -52,11 +52,7 @@ type Data struct {
 const MSSQL = "mssql"
 
 func init() {
-	plugins.RegisterPlugin(&MSSQLPlugin{})
-}
-
-func (p *MSSQLPlugin) PortPriority(port uint16) bool {
-	return port == 1433
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
@@ -306,7 +302,7 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 	return Data{Version: version}, true, nil
 }
 
-func (p *MSSQLPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	data, check, err := DetectMSSQL(conn, timeout)
 	if check && err != nil {
 		return nil, nil
@@ -314,17 +310,23 @@ func (p *MSSQLPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.T
 		return nil, err
 	}
 
-	return plugins.CreateServiceFrom(target, plugins.ServiceMSSQL{}, false, data.Version, plugins.TCP), nil
+	//TODO: SSL missing + Version: data.Version
+	fmt.Println(data)
+	return plugins.CreateServiceFrom(target, p.Name(), ServiceMSSQL{}, nil), nil
 }
 
-func (p *MSSQLPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return MSSQL
 }
 
-func (p *MSSQLPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *MSSQLPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 143
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{1433}
 }

@@ -38,7 +38,7 @@ func TestSMB(t *testing.T) {
 		},
 	}
 
-	p := &SMBPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

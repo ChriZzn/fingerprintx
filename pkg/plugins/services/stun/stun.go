@@ -120,11 +120,11 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	if err != nil {
 		return nil, nil
 	}
-	payload := plugins.ServiceStun{
+	payload := ServiceStun{
 		Info: fmt.Sprintf("%s", infoMap),
 	}
 
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
 func parseResponse(response []byte) (map[string]any, error) {
@@ -179,10 +179,6 @@ func parseResponse(response []byte) (map[string]any, error) {
 	return attrInfo, nil
 }
 
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 3478
-}
-
 func (p *Plugin) Name() string {
 	return STUN
 }
@@ -193,4 +189,8 @@ func (p *Plugin) Type() plugins.Protocol {
 
 func (p *Plugin) Priority() int {
 	return 2000
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{3478}
 }

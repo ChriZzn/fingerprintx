@@ -15,6 +15,7 @@
 package rsync
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type RSYNCPlugin struct{}
+type Plugin struct{}
 
 const (
 	RsyncMagicHeaderLength = 8
@@ -31,11 +32,7 @@ const (
 )
 
 func init() {
-	plugins.RegisterPlugin(&RSYNCPlugin{})
-}
-
-func (p *RSYNCPlugin) PortPriority(port uint16) bool {
-	return port == 873
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 // Run
@@ -51,7 +48,7 @@ func (p *RSYNCPlugin) PortPriority(port uint16) bool {
    This program was tested with docker run -p 873:873 vimagick/rsyncd
    The default port for rsyncd is 873
 */
-func (p *RSYNCPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	requestBytes := []byte{
 		// ascii "@RSYNCD:" magic header
 		0x40, 0x52, 0x53, 0x59, 0x54, 0x43, 0x44, 0x3a,
@@ -73,19 +70,26 @@ func (p *RSYNCPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.T
 
 	if string(response[:RsyncMagicHeaderLength]) == "@RSYNCD:" {
 		version := strings.Split(string(response[RsyncMagicHeaderLength+1:]), "\n")[0]
-		return plugins.CreateServiceFrom(target, plugins.ServiceRsync{}, false, version, plugins.TCP), nil
+		//TODO: version
+		fmt.Println(version)
+		return plugins.CreateServiceFrom(target, p.Name(), ServiceRsync{}, nil), nil
 	}
 
 	return nil, nil
 }
 
-func (p *RSYNCPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return RSYNC
 }
 
-func (p *RSYNCPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
-func (p *RSYNCPlugin) Priority() int {
+
+func (p *Plugin) Priority() int {
 	return 578
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{873}
 }

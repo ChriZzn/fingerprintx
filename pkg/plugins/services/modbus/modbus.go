@@ -30,17 +30,13 @@ const (
 	ModbusErrorAddend       = 0x80
 )
 
-type MODBUSPlugin struct{}
+type Plugin struct{}
 
 func init() {
-	plugins.RegisterPlugin(&MODBUSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 const MODBUS = "modbus"
-
-func (p *MODBUSPlugin) PortPriority(port uint16) bool {
-	return port == 502
-}
 
 // Run
 /*
@@ -65,7 +61,7 @@ func (p *MODBUSPlugin) PortPriority(port uint16) bool {
    Initial testing done with `docker run -it -p 502:5020 oitc/modbus-server:latest`
    The default TCP port is 502, but this is unofficial.
 */
-func (p *MODBUSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	transactionID := make([]byte, 2)
 	_, err := rand.Read(transactionID)
 	if err != nil {
@@ -105,23 +101,27 @@ func (p *MODBUSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.
 		// successful request, validate contents
 		if response[ModbusHeaderLength] == ModbusDiscreteInputCode {
 			if response[ModbusHeaderLength+1] == 1 && (response[ModbusHeaderLength+2]>>1) == 0x00 {
-				return plugins.CreateServiceFrom(target, plugins.ServiceModbus{}, false, "", plugins.TCP), nil
+				return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, nil), nil
 			}
 		} else if response[ModbusHeaderLength] == ModbusDiscreteInputCode+ModbusErrorAddend {
-			return plugins.CreateServiceFrom(target, plugins.ServiceModbus{}, false, "", plugins.TCP), nil
+			return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, nil), nil
 		}
 	}
 	return nil, nil
 }
 
-func (p *MODBUSPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return MODBUS
 }
 
-func (p *MODBUSPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *MODBUSPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 400
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{502}
 }

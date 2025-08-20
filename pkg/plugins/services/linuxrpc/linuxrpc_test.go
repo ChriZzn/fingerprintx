@@ -39,7 +39,7 @@ func TestRPC(t *testing.T) {
 		},
 	}
 
-	p := &RPCPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

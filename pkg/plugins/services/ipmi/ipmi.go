@@ -81,7 +81,7 @@ var ipmiExpectedResponse = [13]byte{
 	0x00, 0x00, 0x00, 0x00,
 }
 
-type IPMIPlugin struct{}
+type Plugin struct{}
 
 const IPMI = "ipmi"
 
@@ -113,30 +113,30 @@ func isIPMI(conn net.Conn, timeout time.Duration) (bool, error) {
 }
 
 func init() {
-	plugins.RegisterPlugin(&IPMIPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *IPMIPlugin) PortPriority(port uint16) bool {
-	return port == 623
-}
-
-func (p *IPMIPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	if isIPMI, err := isIPMI(conn, timeout); !isIPMI || err != nil {
 		return nil, nil
 	}
-	payload := plugins.ServiceIPMI{}
+	payload := ServiceIPMI{}
 
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *IPMIPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return IPMI
 }
 
-func (p *IPMIPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.UDP
 }
 
-func (p *IPMIPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 80
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{623}
 }

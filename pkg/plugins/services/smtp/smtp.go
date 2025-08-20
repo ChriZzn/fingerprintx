@@ -24,11 +24,9 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type SMTPPlugin struct{}
-type TLSPlugin struct{}
+type Plugin struct{}
 
 const SMTP = "smtp"
-const SMTPS = "smtps"
 
 type Data struct {
 	Banner      string
@@ -36,12 +34,7 @@ type Data struct {
 }
 
 func init() {
-	plugins.RegisterPlugin(&SMTPPlugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
-}
-
-func (p *SMTPPlugin) PortPriority(port uint16) bool {
-	return port == 25 || port == 587 || port == 465 || port == 2525
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 func handleSMTPConn(response []byte) (bool, bool) {
@@ -84,15 +77,8 @@ func handleSMTPHelo(response []byte) (bool, bool) {
 	return isSMTP, isSMTPErr
 }
 
-func (p *TLSPlugin) PortPriority(port uint16) bool {
-	return port == 465
-}
-
-func DetectSMTP(conn net.Conn, tls bool, timeout time.Duration) (Data, bool, error) {
+func DetectSMTP(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 	protocol := SMTP
-	if tls {
-		protocol = SMTPS
-	}
 
 	response, err := utils.Recv(conn, timeout)
 	if err != nil {
@@ -149,54 +135,33 @@ func DetectSMTP(conn net.Conn, tls bool, timeout time.Duration) (Data, bool, err
 	return Data{}, true, &utils.InvalidResponseError{Service: protocol}
 }
 
-func (p *SMTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	data, check, err := DetectSMTP(conn, false, timeout)
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	data, check, err := DetectSMTP(conn, timeout)
 	if err == nil && check {
-		payload := plugins.ServiceSMTP{
+		payload := ServiceSMTP{
 			Banner:      data.Banner,
 			AuthMethods: data.AuthMethods,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		//TODO: ADD STARTTLS
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	} else if err != nil && check {
 		return nil, nil
 	}
 	return nil, err
 }
 
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	data, check, err := DetectSMTP(conn, false, timeout)
-	if err == nil && check {
-		payload := plugins.ServiceSMTP{
-			Banner:      data.Banner,
-			AuthMethods: data.AuthMethods,
-		}
-		return plugins.CreateServiceFrom(target, payload, true, "", plugins.TCP), nil
-	} else if err != nil && check {
-		return nil, nil
-	}
-	return nil, err
-}
-
-func (p *SMTPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return SMTP
 }
 
-func (p *SMTPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TLSPlugin) Name() string {
-	return SMTPS
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
-}
-
-func (p *SMTPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 60
 }
 
-func (p *TLSPlugin) Priority() int {
-	return 61
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{25, 587, 465, 2525}
 }

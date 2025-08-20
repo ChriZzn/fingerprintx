@@ -63,14 +63,10 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		stringBegin >= len(response) || stringEnd >= len(response) {
 		return nil, nil
 	}
-	payload := plugins.ServiceNetbios{
+	payload := ServiceNetbios{
 		NetBIOSName: string(response[stringBegin:stringEnd]),
 	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
-}
-
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 137
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
 func (p *Plugin) Name() string {
@@ -83,4 +79,8 @@ func (p *Plugin) Type() plugins.Protocol {
 
 func (p *Plugin) Priority() int {
 	return 700
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{137}
 }

@@ -42,7 +42,7 @@ func TestMSSQL(t *testing.T) {
 		},
 	}
 
-	p := &MSSQLPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

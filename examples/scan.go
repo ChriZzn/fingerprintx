@@ -16,20 +16,19 @@ func main() {
 		DefaultTimeout: time.Duration(2) * time.Second,
 		FastMode:       false,
 		Verbose:        false,
-		UDP:            false,
 	}
 
 	// create a target list to scan
 	ip, _ := netip.ParseAddr("146.148.61.165")
 	target := plugins.Target{
-		Address: netip.AddrPortFrom(ip, 443),
-		Host:    "praetorian.com",
+		Address:   netip.AddrPortFrom(ip, 443),
+		Transport: plugins.TCP,
 	}
 	targets := make([]plugins.Target, 1)
 	targets = append(targets, target)
 
 	// run the scan
-	results, err := scan.ScanTargets(targets, fxConfig)
+	results, err := scan.Scan(targets, fxConfig)
 	if err != nil {
 		log.Fatalf("error: %s\n", err)
 	}

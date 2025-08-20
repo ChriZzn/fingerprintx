@@ -41,7 +41,7 @@ func TestMySQL(t *testing.T) {
 		},
 	}
 
-	p := &MYSQLPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

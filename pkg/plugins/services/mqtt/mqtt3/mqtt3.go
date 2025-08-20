@@ -15,6 +15,7 @@
 package mqtt3
 
 import (
+	"github.com/chrizzn/fingerprintx/pkg/plugins/services/mqtt"
 	"net"
 	"time"
 
@@ -22,15 +23,12 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type MQTT3Plugin struct{}
-type TLSPlugin struct{}
+type Plugin struct{}
 
 const MQTT = "mqtt3"
-const MQTTTLS = "mqtt3tls"
 
 func init() {
-	plugins.RegisterPlugin(&MQTT3Plugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 func testConnectRequest(conn net.Conn, requestBytes []byte, timeout time.Duration) (bool, error) {
@@ -49,66 +47,7 @@ func testConnectRequest(conn net.Conn, requestBytes []byte, timeout time.Duratio
 	return true, &utils.InvalidResponseError{Service: MQTT}
 }
 
-func (p *MQTT3Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	return Run(conn, timeout, false, target)
-}
-
-func (p *MQTT3Plugin) PortPriority(i uint16) bool {
-	return i == 1883
-}
-
-func (p *MQTT3Plugin) Name() string {
-	return MQTT
-}
-
-func (p *MQTT3Plugin) Type() plugins.Protocol {
-	return plugins.TCP
-}
-
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	return Run(conn, timeout, true, target)
-}
-
-func (p *TLSPlugin) PortPriority(i uint16) bool {
-	return i == 8883
-}
-
-func (p *TLSPlugin) Name() string {
-	return MQTTTLS
-}
-
-func (p *MQTT3Plugin) Priority() int {
-	return 500
-}
-
-func (p *TLSPlugin) Priority() int {
-	return 501
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
-}
-
-// Run
-/*
-   MQTT is a publish-subscribe protocol designed to be used as
-   a lightweight messaging protocol. An MQTT connection begins with
-   a CONNECT request and a CONNACK response. A well-behaved MQTT server
-   will simply close the connection if an invalid request is sent. Connect
-   packets are formatted slightly differently between v3 and v5, so two requests
-   are sent.
-
-   CONNECT requests are composed of a fixed header that indicates the message type and
-   length, and then a variable length header that specifies the connection details,
-   including the protocol version. The v5 header also includes a properties section, while the
-   v3 header does not.
-
-   The CONNACK response will begin with a 0x20 byte that indicates the message type. The
-   presence/absence of this byte is used to determine if MQTT is present.
-*/
-
-func Run(conn net.Conn, timeout time.Duration, tls bool, target plugins.Target) (*plugins.Service, error) {
-	// version 3.1.x connect command
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	mqttConnect3 := []byte{
 		// message type 1 + 4 bits reserved
 		0x10,
@@ -132,9 +71,46 @@ func Run(conn net.Conn, timeout time.Duration, tls bool, target plugins.Target) 
 
 	check, err := testConnectRequest(conn, mqttConnect3, timeout)
 	if check && err == nil {
-		return plugins.CreateServiceFrom(target, plugins.ServiceMQTT{}, tls, "3.1.x", plugins.TCP), nil
+		//TODO: SSL + "3.1.x",
+		return plugins.CreateServiceFrom(target, p.Name(), mqtt.ServiceMQTT{}, nil), nil
 	} else if check && err != nil {
 		return nil, nil
 	}
 	return nil, err
 }
+
+func (p *Plugin) Name() string {
+	return MQTT
+}
+
+func (p *Plugin) Type() plugins.Protocol {
+	return plugins.TCP
+}
+
+func (p *Plugin) Priority() int {
+	return 500
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{1883, 8883}
+}
+
+//TODO: consolidate ??
+
+// Run
+/*
+   MQTT is a publish-subscribe protocol designed to be used as
+   a lightweight messaging protocol. An MQTT connection begins with
+   a CONNECT request and a CONNACK response. A well-behaved MQTT server
+   will simply close the connection if an invalid request is sent. Connect
+   packets are formatted slightly differently between v3 and v5, so two requests
+   are sent.
+
+   CONNECT requests are composed of a fixed header that indicates the message type and
+   length, and then a variable length header that specifies the connection details,
+   including the protocol version. The v5 header also includes a properties section, while the
+   v3 header does not.
+
+   The CONNACK response will begin with a 0x20 byte that indicates the message type. The
+   presence/absence of this byte is used to determine if MQTT is present.
+*/

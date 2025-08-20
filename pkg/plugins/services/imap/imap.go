@@ -23,15 +23,12 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type IMAPPlugin struct{}
-type TLSPlugin struct{}
+type Plugin struct{}
 
 const IMAP = "imap"
-const IMAPS = "imaps"
 
 func init() {
-	plugins.RegisterPlugin(&IMAPPlugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 /*
@@ -137,7 +134,7 @@ func DetectIMAP(conn net.Conn, timeout time.Duration) (string, bool, error) {
 	return string(response[5:]), check, err
 }
 
-func (p *IMAPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	result, check, err := DetectIMAP(conn, timeout)
 	if err != nil && check { // service is not running IMAP
 		return nil, nil
@@ -146,55 +143,24 @@ func (p *IMAPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 	}
 
 	// service is running IMAP
-	payload := plugins.ServiceIMAPS{
+	payload := ServiceIMAP{
 		Banner: result,
 	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *IMAPPlugin) PortPriority(i uint16) bool {
-	return i == 143
-}
-
-func (p *IMAPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return IMAP
 }
 
-func (p *IMAPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	result, check, err := DetectIMAP(conn, timeout)
-	if err != nil && check { // service is not running IMAP
-		return nil, nil
-	} else if err != nil && !check { // plugin error
-		return nil, err
-	}
-
-	// service is running IMAPS
-	payload := plugins.ServiceIMAPS{
-		Banner: result,
-	}
-	return plugins.CreateServiceFrom(target, payload, true, "", plugins.TCP), nil
-}
-
-func (p *TLSPlugin) PortPriority(i uint16) bool {
-	return i == 993
-}
-
-func (p *TLSPlugin) Name() string {
-	return IMAPS
-}
-
-func (p *IMAPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 191
 }
 
-func (p *TLSPlugin) Priority() int {
-	return 190
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{143, 993}
 }

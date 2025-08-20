@@ -25,15 +25,12 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type LDAPPlugin struct{}
-type TLSPlugin struct{}
+type Plugin struct{}
 
 const LDAP = "ldap"
-const LDAPS = "ldaps"
 
 func init() {
-	plugins.RegisterPlugin(&LDAPPlugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 /*
@@ -162,58 +159,30 @@ func DetectLDAP(conn net.Conn, timeout time.Duration) (bool, error) {
 	return false, nil
 }
 
-func (p *LDAPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	isLDAP, err := DetectLDAP(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if isLDAP {
-		return plugins.CreateServiceFrom(target, plugins.ServiceLDAP{}, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), ServiceLDAP{}, nil), nil
 	}
 	return nil, nil
 }
 
-func (p *LDAPPlugin) PortPriority(i uint16) bool {
-	return i == 389
-}
-
-func (p *LDAPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return LDAP
 }
 
-func (p *LDAPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	isLDAPS, err := DetectLDAP(conn, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	if isLDAPS {
-		return plugins.CreateServiceFrom(target, plugins.ServiceLDAPS{}, true, "", plugins.TCP), nil
-	}
-	return nil, nil
-}
-
-func (p *TLSPlugin) PortPriority(i uint16) bool {
-	return i == 636
-}
-
-func (p *LDAPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 175
 }
 
-func (p *TLSPlugin) Priority() int {
-	return 175
-}
-
-func (p *TLSPlugin) Name() string {
-	return LDAPS
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{389, 636}
 }

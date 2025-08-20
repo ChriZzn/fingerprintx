@@ -31,16 +31,12 @@ import (
 	"github.com/chrizzn/fingerprintx/third_party/cryptolib/ssh"
 )
 
-type SSHPlugin struct{}
+type Plugin struct{}
 
 const SSH = "ssh"
 
 func init() {
-	plugins.RegisterPlugin(&SSHPlugin{})
-}
-
-func (p *SSHPlugin) PortPriority(port uint16) bool {
-	return port == 22 || port == 2222
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 // https://www.rfc-editor.org/rfc/rfc4253.html#section-4
@@ -194,7 +190,7 @@ func checkAlgo(data []byte) (map[string]string, error) {
 	return info, nil
 }
 
-func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	response, err := utils.Recv(conn, timeout)
 	passwordAuth := false
 
@@ -219,10 +215,10 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 
 	algo, err := checkAlgo(response)
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner: banner,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 
 	// check auth methods
@@ -291,12 +287,12 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 	}
 	_, err = io.ReadFull(rand.Reader, sendMsg.Cookie[:])
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	if firstKeyExchange := t.SessionID == nil; firstKeyExchange {
 		sendMsg.KexAlgos = make([]string, 0, len(t.Config.KeyExchanges)+1)
@@ -309,12 +305,12 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 
 	err = ssh.PushPacket(t.HandshakeTransport, packetCopy)
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 
 	cookie, err := hex.DecodeString(algo["cookie"])
@@ -322,12 +318,12 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 	copy(ret[:], cookie)
 
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	otherInit := &ssh.KexInitMsg{
 		KexAlgos:                strings.Split(algo["KexAlgos"], ","),
@@ -345,12 +341,12 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 
 	t.Algorithms, err = ssh.FindAgreedAlgorithms(false, &sendMsg, otherInit)
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	magics := ssh.HandshakeMagics{
 		ClientVersion: t.ClientVersion,
@@ -363,26 +359,26 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 
 	result, err := ssh.Clients(t, kex, &magics)
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	hostKey, err := ssh.ParsePublicKey(result.HostKey)
 	if err != nil {
-		payload := plugins.ServiceSSH{
+		payload := ServiceSSH{
 			Banner:              banner,
 			PasswordAuthEnabled: passwordAuth,
 			Algo:                fmt.Sprintf("%s", algo),
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	fingerprint := ssh.FingerprintSHA256(hostKey)
 	base64HostKey := base64.StdEncoding.EncodeToString(result.HostKey)
 
-	payload := plugins.ServiceSSH{
+	payload := ServiceSSH{
 		Banner:              banner,
 		PasswordAuthEnabled: passwordAuth,
 		Algo:                fmt.Sprintf("%s", algo),
@@ -390,17 +386,21 @@ func (p *SSHPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 		HostKeyType:         hostKey.Type(),
 		HostKeyFingerprint:  fingerprint,
 	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *SSHPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return SSH
 }
 
-func (p *SSHPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *SSHPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 2
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{22, 2222, 2244}
 }

@@ -16,17 +16,39 @@ package runner
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/chrizzn/fingerprintx/pkg/scan"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
+	"os"
+	"strings"
 )
 
 var (
 	config     cliConfig
 	targetList []string
 	userInput  string
-	rootCmd    = &cobra.Command{
+	pluginsCmd = &cobra.Command{
+		Use:   "plugins",
+		Short: "List all available plugins",
+		Run: func(cmd *cobra.Command, args []string) {
+
+			// Table
+			t := table.NewWriter()
+			t.SetOutputMirror(os.Stdout)
+			t.AppendHeader(table.Row{"Priority", "Plugin", "Protocol", "Ports"})
+
+			// Plugin Matrix
+			pm := scan.NewPluginMatrix()
+			for _, plugin := range pm.AllPlugins {
+				ports := strings.Trim(fmt.Sprint(plugin.Ports()), "[]")
+				t.AppendRow([]interface{}{plugin.Priority(), plugin.Name(), plugin.Type(), ports})
+			}
+			t.SetStyle(table.StyleLight)
+			t.Render()
+			os.Exit(0)
+		},
+	}
+	rootCmd = &cobra.Command{
 		Use: "fingerprintx [flags]\nTARGET SPECIFICATION:\n\tRequires a host and port number or ip and port number. " +
 			"The port is assumed to be open.\n\tHOST:PORT or IP:PORT\nEXAMPLES:\n\tfingerprintx -t praetorian.com:80\n" +
 			"\tfingerprintx -l input-file.txt\n\tfingerprintx --json -t praetorian.com:80,127.0.0.1:8000",
@@ -41,9 +63,9 @@ var (
 				return err
 			}
 
-			results, err := scan.ScanTargets(targetsList, createScanConfig(config))
+			results, err := scan.Scan(targetsList, createScanConfig(config))
 			if err != nil {
-				return fmt.Errorf("Failed running ScanTargets (%w)", err)
+				return fmt.Errorf("Failed running Scan (%w)", err)
 			}
 
 			err = Report(results)
@@ -60,6 +82,8 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
+	rootCmd.AddCommand(pluginsCmd)
+
 	rootCmd.PersistentFlags().StringVarP(&inputFile, "list", "l", "", "input file containing targets")
 	rootCmd.PersistentFlags().StringSliceVarP(&targetList, "targets", "t", nil, "target or comma separated target list")
 	rootCmd.PersistentFlags().StringVarP(&config.outputFile, "output", "o", "", "output file")
@@ -68,8 +92,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&config.outputCSV, "csv", "", false, "output format in csv")
 
 	rootCmd.PersistentFlags().BoolVarP(&config.fastMode, "fast", "f", false, "fast mode")
-	rootCmd.PersistentFlags().
-		BoolVarP(&config.useUDP, "udp", "U", false, "run UDP plugins")
 
 	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
 	rootCmd.PersistentFlags().

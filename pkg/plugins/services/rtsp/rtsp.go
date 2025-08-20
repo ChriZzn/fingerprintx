@@ -36,15 +36,11 @@ const (
 	RTSP                   = "rtsp"
 )
 
-type RTSPPlugin struct{}
+type Plugin struct{}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	plugins.RegisterPlugin(&RTSPPlugin{})
-}
-
-func (p *RTSPPlugin) PortPriority(port uint16) bool {
-	return port == 554
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 /*
@@ -59,7 +55,7 @@ func (p *RTSPPlugin) PortPriority(port uint16) bool {
    The default port for rtsp is 554.
 */
 
-func (p *RTSPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	cseq := strconv.Itoa(rand.Intn(10000)) //nolint:gosec
 
 	requestString := strings.Join([]string{
@@ -105,23 +101,27 @@ func (p *RTSPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 		}
 
 		serverinfo := response[serverValueStart : serverValueStart+serverValueEnd]
-		payload := plugins.ServiceRtsp{
+		payload := ServiceRtsp{
 			ServerInfo: serverinfo,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 
 	return nil, nil
 }
 
-func (p *RTSPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return RTSP
 }
 
-func (p *RTSPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *RTSPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 1001
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{554}
 }

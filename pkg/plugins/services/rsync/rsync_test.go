@@ -37,7 +37,7 @@ func TestRsync(t *testing.T) {
 		},
 	}
 
-	p := &RSYNCPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

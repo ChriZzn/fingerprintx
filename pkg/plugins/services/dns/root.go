@@ -26,9 +26,6 @@ import (
 
 const DNS = "dns"
 
-type UDPPlugin struct{}
-type TCPPlugin struct{}
-
 func init() {
 	plugins.RegisterPlugin(&UDPPlugin{})
 	plugins.RegisterPlugin(&TCPPlugin{})
@@ -81,65 +78,4 @@ func CheckDNS(conn net.Conn, timeout time.Duration) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func (p *UDPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	isDNS, err := CheckDNS(conn, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	if isDNS {
-		payload := plugins.ServiceDNS{}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.UDP), nil
-	}
-
-	return nil, nil
-}
-
-func (p *UDPPlugin) PortPriority(i uint16) bool {
-	return i == 53
-}
-
-func (p UDPPlugin) Name() string {
-	return DNS
-}
-
-func (p *UDPPlugin) Type() plugins.Protocol {
-	return plugins.UDP
-}
-
-func (p TCPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	isDNS, err := CheckDNS(conn, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	if isDNS {
-		payload := plugins.ServiceDNS{}
-
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
-	}
-
-	return nil, nil
-}
-
-func (p TCPPlugin) PortPriority(i uint16) bool {
-	return i == 53
-}
-
-func (p TCPPlugin) Name() string {
-	return DNS
-}
-
-func (p *TCPPlugin) Priority() int {
-	return 50
-}
-
-func (p *UDPPlugin) Priority() int {
-	return 50
-}
-
-func (p TCPPlugin) Type() plugins.Protocol {
-	return plugins.TCP
 }

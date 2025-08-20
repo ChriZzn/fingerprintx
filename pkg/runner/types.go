@@ -21,7 +21,6 @@ type cliConfig struct {
 	overwriteOutput bool
 	fastMode        bool
 	timeout         int
-	useUDP          bool
 	verbose         bool
 	showErrors      bool
 }

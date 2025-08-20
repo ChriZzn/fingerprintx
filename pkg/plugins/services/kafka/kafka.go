@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package kafkanew
+package kafka
 
 import (
 	"encoding/binary"
@@ -25,23 +25,28 @@ import (
 )
 
 type Plugin struct{}
-type TLSPlugin struct{}
 
-const KAFKA = "kafkaNew"
-const KAFKATLS = "KafkaNewTLS"
+const KAFKA = "kafka"
 
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
 }
 
 func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	result, err := Run(conn, false, timeout, target)
-	return result, err
-}
 
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 9092
+	notReportError, err := checkAPIVersions(conn, timeout)
+	if err != nil {
+		if !notReportError {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if !notReportError {
+		return nil, nil
+	}
+
+	return plugins.CreateServiceFrom(target, p.Name(), ServiceKafka{}, nil), nil
+
 }
 
 func (p *Plugin) Name() string {
@@ -52,29 +57,12 @@ func (p *Plugin) Priority() int {
 	return 200
 }
 
-func (p *TLSPlugin) Priority() int {
-	return 200
-}
-
 func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	result, err := Run(conn, true, timeout, target)
-	return result, err
-}
-
-func (p *TLSPlugin) PortPriority(i uint16) bool {
-	return i == 9093
-}
-
-func (p *TLSPlugin) Name() string {
-	return KAFKATLS
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{9092, 9093}
 }
 
 /*
@@ -111,25 +99,6 @@ authentication will be detected by any of the above methods. It's possible that
 strategy 3 will still work in this situation, but I was not able to confirm due
 to the difficulty of setting up a testing environment for an older version.
 */
-func Run(conn net.Conn, tls bool, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	/* Initiate first TCP connection with target. If the target is running an
-	/* older version of Kafka, the connection will be terminated after sending
-	/* ApiVersions, and we will need to make a new one. */
-	/* Make first notReportError - this will catch any broker running Kafka 0.10.0.0 or
-	/* later. */
-	notReportError, err := checkAPIVersions(conn, timeout)
-	if err != nil {
-		if !notReportError {
-			return nil, err
-		}
-		return nil, nil
-	}
-	if !notReportError {
-		return nil, nil
-	}
-
-	return plugins.CreateServiceFrom(target, plugins.ServiceKafka{}, tls, ">=0.10.0.0", plugins.TCP), nil
-}
 
 /* Helper function to generate a correlation_id */
 /* Might update to be random later */

@@ -27,14 +27,12 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type RDPPlugin struct{}
-type TLSPlugin struct{}
+type Plugin struct{}
 
 const RDP = "rdp"
 
 func init() {
-	plugins.RegisterPlugin(&RDPPlugin{})
-	plugins.RegisterPlugin(&TLSPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 // checkSignature checks if a given response matches the expected signature for
@@ -49,14 +47,6 @@ func checkSignature(a, b []byte) bool {
 		}
 	}
 	return true
-}
-
-func (p *RDPPlugin) PortPriority(port uint16) bool {
-	return port == 3389
-}
-
-func (p *TLSPlugin) PortPriority(port uint16) bool {
-	return port == 3389
 }
 
 // getOperatingSystemSignatures returns operating system specific signatures
@@ -183,8 +173,8 @@ func DetectRDP(conn net.Conn, timeout time.Duration) (string, bool, error) {
 	return "", true, &utils.InvalidResponseError{Service: RDP}
 }
 
-func DetectRDPAuth(conn net.Conn, timeout time.Duration) (*plugins.ServiceRDP, bool, error) {
-	info := plugins.ServiceRDP{}
+func DetectRDPAuth(conn net.Conn, timeout time.Duration) (*ServiceRDP, bool, error) {
+	info := ServiceRDP{}
 
 	// CredSSP protocol - NTLM authentication
 	// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cssp
@@ -338,49 +328,32 @@ func DetectRDPAuth(conn net.Conn, timeout time.Duration) (*plugins.ServiceRDP, b
 	return &info, true, nil
 }
 
-func (p *RDPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	fingerprint, check, err := DetectRDP(conn, timeout)
 	if check && err != nil {
 		return nil, nil
 	} else if check && err == nil {
-		payload := plugins.ServiceRDP{
+		payload := ServiceRDP{
 			OSFingerprint: fingerprint,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		//todo: SSL + Type -> DetectRDPAuth ...
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	return nil, err
 }
 
-func (p *TLSPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	info, check, err := DetectRDPAuth(conn, timeout)
-	if check && err != nil {
-		return nil, nil
-	} else if check && info != nil && err == nil {
-		return plugins.CreateServiceFrom(target, *info, true, "", plugins.TCP), nil
-	}
-	return nil, err
-}
-
-func (p *RDPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return RDP
 }
 
-func (p *RDPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TLSPlugin) Name() string {
-	return RDP
-}
-
-func (p *TLSPlugin) Type() plugins.Protocol {
-	return plugins.TCPTLS
-}
-
-func (p *RDPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 89
 }
 
-func (p *TLSPlugin) Priority() int {
-	return 89
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{3389}
 }

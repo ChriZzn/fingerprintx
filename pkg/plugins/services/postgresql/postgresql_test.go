@@ -43,7 +43,7 @@ func TestPostgreSQL(t *testing.T) {
 		},
 	}
 
-	p := &POSTGRESPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

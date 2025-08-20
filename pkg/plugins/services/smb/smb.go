@@ -28,7 +28,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type SMBPlugin struct{}
+type Plugin struct{}
 
 const SMB = "smb"
 
@@ -88,15 +88,11 @@ type NTLMChallenge struct {
 }
 
 func init() {
-	plugins.RegisterPlugin(&SMBPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *SMBPlugin) PortPriority(port uint16) bool {
-	return port == 445
-}
-
-func DetectSMBv2(conn net.Conn, timeout time.Duration) (*plugins.ServiceSMB, error) {
-	info := plugins.ServiceSMB{}
+func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
+	info := ServiceSMB{}
 
 	// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e14db7ff-763a-4263-8b10-0c3944f52fc5
 	negotiateReqPacket := []byte{
@@ -350,7 +346,7 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*plugins.ServiceSMB, err
 	return &info, nil
 }
 
-func (p *SMBPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	info, err := DetectSMBv2(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -359,17 +355,22 @@ func (p *SMBPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 		return nil, nil
 	}
 
-	return plugins.CreateServiceFrom(target, info, false, info.OSVersion, plugins.TCP), nil
+	//TODO: type (info.OSVersion)
+	return plugins.CreateServiceFrom(target, p.Name(), info, nil), nil
 }
 
-func (p *SMBPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return SMB
 }
 
-func (p *SMBPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *SMBPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 320
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{445}
 }

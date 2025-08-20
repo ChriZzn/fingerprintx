@@ -37,7 +37,7 @@ func TestRedis(t *testing.T) {
 		},
 	}
 
-	p := &REDISPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

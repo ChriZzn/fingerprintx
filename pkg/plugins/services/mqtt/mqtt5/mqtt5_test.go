@@ -37,7 +37,7 @@ func TestMqtt5(t *testing.T) {
 		},
 	}
 
-	p := &MQTT5Plugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

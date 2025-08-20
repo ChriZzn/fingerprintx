@@ -37,7 +37,7 @@ func TestModbus(t *testing.T) {
 		},
 	}
 
-	p := &MODBUSPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

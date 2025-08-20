@@ -23,7 +23,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type TELNETPlugin struct{}
+type Plugin struct{}
 
 const TELNET = "telnet"
 
@@ -261,14 +261,10 @@ func isTelnet(telnet []byte) error {
 }
 
 func init() {
-	plugins.RegisterPlugin(&TELNETPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *TELNETPlugin) PortPriority(port uint16) bool {
-	return port == 23
-}
-
-func (p *TELNETPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	response, err := utils.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -280,20 +276,24 @@ func (p *TELNETPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.
 	if err := isTelnet(response); err != nil {
 		return nil, nil
 	}
-	payload := plugins.ServiceTelnet{
+	payload := ServiceTelnet{
 		ServerData: hex.EncodeToString(response),
 	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *TELNETPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return TELNET
 }
 
-func (p *TELNETPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *TELNETPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 4
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{23}
 }

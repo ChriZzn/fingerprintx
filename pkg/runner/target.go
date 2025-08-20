@@ -69,13 +69,30 @@ func readTargets(inputFile string, verbose bool) ([]plugins.Target, error) {
 }
 
 func parseTarget(inputTarget string) (plugins.Target, error) {
+
 	scanTarget := plugins.Target{}
 	target := strings.Split(strings.TrimSpace(inputTarget), ":")
 	if len(target) != 2 {
 		return plugins.Target{}, fmt.Errorf("invalid target: %s", inputTarget)
 	}
 
-	hostStr, portStr := target[0], target[1]
+	serviceStr := strings.Split(target[1], "/")
+	hostStr, portStr := target[0], serviceStr[0]
+
+	transportStr := "tcp"
+	if len(serviceStr) > 1 {
+		transportStr = strings.ToLower(serviceStr[1])
+	}
+
+	var protocol plugins.Protocol
+	switch transportStr {
+	case "tcp":
+		protocol = plugins.TCP
+	case "udp":
+		protocol = plugins.UDP
+	default:
+		panic("invalid transport specified")
+	}
 
 	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
@@ -106,6 +123,7 @@ func parseTarget(inputTarget string) (plugins.Target, error) {
 	}
 	targetAddr := netip.AddrPortFrom(addr, uint16(port))
 	scanTarget.Address = targetAddr
+	scanTarget.Transport = protocol
 
 	if isHostname {
 		scanTarget.Host = hostStr

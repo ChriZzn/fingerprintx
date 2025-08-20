@@ -40,7 +40,7 @@ func TestEcho(t *testing.T) {
 		},
 	}
 
-	p := &EchoPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

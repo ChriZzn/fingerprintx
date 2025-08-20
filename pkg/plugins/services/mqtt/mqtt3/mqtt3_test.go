@@ -37,7 +37,7 @@ func TestMqtt3(t *testing.T) {
 		},
 	}
 
-	p := &MQTT3Plugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

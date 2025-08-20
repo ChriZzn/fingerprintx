@@ -37,7 +37,7 @@ func TestRDP(t *testing.T) {
 		},
 	}
 
-	p := &RDPPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

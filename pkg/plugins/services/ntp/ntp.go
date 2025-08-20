@@ -59,13 +59,9 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 
 	// check if response is valid NTP packet
 	if response[0]&0x07 == ModeServer && len(response) == len(InitialConnectionPackage) {
-		return plugins.CreateServiceFrom(target, plugins.ServiceNTP{}, false, "", plugins.UDP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), ServiceNTP{}, nil), nil
 	}
 	return nil, nil
-}
-
-func (p *Plugin) PortPriority(i uint16) bool {
-	return i == 123
 }
 
 func (p *Plugin) Name() string {
@@ -78,4 +74,8 @@ func (p *Plugin) Type() plugins.Protocol {
 
 func (p *Plugin) Priority() int {
 	return 800
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{123}
 }

@@ -15,6 +15,7 @@
 package vnc
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -22,9 +23,9 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type VNCPlugin struct{}
+type Plugin struct{}
 
-const VNC = "VNC"
+const VNC = "vnc"
 
 // Check if the response is from a VNC server
 // https://datatracker.ietf.org/doc/html/rfc6143#section-7.1
@@ -66,14 +67,10 @@ func checkVNC(data []byte) (string, error) {
 }
 
 func init() {
-	plugins.RegisterPlugin(&VNCPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *VNCPlugin) PortPriority(port uint16) bool {
-	return port == 5900
-}
-
-func (p *VNCPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	response, err := utils.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -86,18 +83,23 @@ func (p *VNCPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 	if err != nil {
 		return nil, nil
 	}
+	fmt.Println(info) //TODO enrich type
 
-	return plugins.CreateServiceFrom(target, plugins.ServiceVNC{}, false, info, plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), ServiceVNC{}, nil), nil
 }
 
-func (p *VNCPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return VNC
 }
 
-func (p *VNCPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *VNCPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 265
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{5900, 5901, 5910}
 }

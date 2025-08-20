@@ -56,23 +56,21 @@ server.
    Human Readable Error Message: Host '50.82.91.234' is not allowed to connect to this MySQL server
 */
 
-type MYSQLPlugin struct{}
+type Plugin struct{}
 
 const (
-	// protocolVersion = 10
-	// maxPacketLength = 1<<24 - 1
-	MYSQL = "MySQL"
+	MYSQL = "mysql"
 )
 
 func init() {
-	plugins.RegisterPlugin(&MYSQLPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 // Run checks if the identified service is a MySQL (or MariaDB) server using
 // two methods. Upon the connection of a client to a MySQL server it can return
 // one of two responses. Either the server returns an initial handshake packet
 // or an error message packet.
-func (p *MYSQLPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	response, err := utils.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -83,40 +81,42 @@ func (p *MYSQLPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.T
 
 	mysqlVersionStr, err := CheckInitialHandshakePacket(response)
 	if err == nil {
-		payload := plugins.ServiceMySQL{
+		payload := ServiceMySQL{
 			PacketType:   "handshake",
 			ErrorMessage: "",
 			ErrorCode:    0,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, mysqlVersionStr, plugins.TCP), nil
+		//TODO: Version mysqlVersionStr
+		fmt.Printf(mysqlVersionStr)
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 
 	errorStr, errorCode, err := CheckErrorMessagePacket(response)
 	if err == nil {
-		payload := plugins.ServiceMySQL{
+		payload := ServiceMySQL{
 			PacketType:   "error",
 			ErrorMessage: errorStr,
 			ErrorCode:    errorCode,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	return nil, nil
 }
 
-func (p *MYSQLPlugin) PortPriority(port uint16) bool {
-	return port == 3306
-}
-
-func (p *MYSQLPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return MYSQL
 }
 
-func (p *MYSQLPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *MYSQLPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 133
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{3306}
 }
 
 // CheckErrorMessagePacket checks the response packet error message

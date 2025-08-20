@@ -38,7 +38,7 @@ func TestIPMI(t *testing.T) {
 		},
 	}
 
-	p := &IPMIPlugin{}
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc

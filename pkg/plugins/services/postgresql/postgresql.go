@@ -23,7 +23,7 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type POSTGRESPlugin struct{}
+type Plugin struct{}
 
 const POSTGRES = "postgres"
 
@@ -98,14 +98,10 @@ func successfulAuth(data []byte) bool {
 }
 
 func init() {
-	plugins.RegisterPlugin(&POSTGRESPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *POSTGRESPlugin) PortPriority(port uint16) bool {
-	return port == 5432
-}
-
-func (p *POSTGRESPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	startupPacket := []byte{
 		0x00, 0x00, 0x00, 0x54, 0x00, 0x03, 0x00, 0x00, 0x75, 0x73, 0x65, 0x72, 0x00, 0x70, 0x6f, 0x73,
 		0x74, 0x67, 0x72, 0x65, 0x73, 0x00, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x00, 0x70,
@@ -128,20 +124,24 @@ func (p *POSTGRESPlugin) Run(conn net.Conn, timeout time.Duration, target plugin
 		return nil, nil
 	}
 
-	payload := plugins.ServicePostgreSQL{
+	payload := ServicePostgreSQL{
 		AuthRequired: !successfulAuth(response),
 	}
-	return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 }
 
-func (p *POSTGRESPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return POSTGRES
 }
 
-func (p *POSTGRESPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *POSTGRESPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 1000
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{5432}
 }

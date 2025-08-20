@@ -29,12 +29,12 @@ import (
 	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
-type ORACLEPlugin struct{}
+type Plugin struct{}
 
 const ORACLE = "oracle"
 
 func init() {
-	plugins.RegisterPlugin(&ORACLEPlugin{})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 /*
@@ -227,19 +227,15 @@ func parseInfo(response []byte) map[string]any {
 	return map[string]any{"Oracle TNS Listener Version": versionStr, "VSNNUM": VSNNum, "ERROR_CODE": ErrCode}
 }
 
-func (p *ORACLEPlugin) PortPriority(port uint16) bool {
-	return port == 1521
-}
-
-func (p *ORACLEPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return ORACLE
 }
 
-func (p *ORACLEPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *ORACLEPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	addr := strings.Split(conn.RemoteAddr().String(), ":")
 	ip, port := addr[0], addr[1]
 	request := checkForOracle(ip, port)
@@ -254,14 +250,18 @@ func (p *ORACLEPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.
 
 	if isOracleDBRunning(response) {
 		oracleInfo := fmt.Sprintf("%s", parseInfo(response))
-		payload := plugins.ServiceOracle{
+		payload := ServiceOracle{
 			Info: oracleInfo,
 		}
-		return plugins.CreateServiceFrom(target, payload, false, "", plugins.TCP), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
 	return nil, nil
 }
 
-func (p *ORACLEPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 900
+}
+
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{1521}
 }
