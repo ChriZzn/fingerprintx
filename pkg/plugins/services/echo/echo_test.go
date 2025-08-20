@@ -26,16 +26,15 @@ func TestEcho(t *testing.T) {
 	testcases := []test.Testcase{
 		{
 			Description: "echo",
-			Port:        7,
+			Port:        9,
 			Protocol:    plugins.TCP,
 			Expected: func(res *plugins.Service) bool {
 				return res != nil
 			},
 			RunConfig: dockertest.RunOptions{
-				Repository:   "itsthenetwork/alpine-ncat",
-				Cmd:          []string{"-e", "/bin/cat", "-k", "-l", "-p", "7"},
-				Entrypoint:   []string{"/usr/bin/ncat"},
-				ExposedPorts: []string{"7"},
+				Repository:   "abrarov/tcp-echo",
+				Cmd:          []string{"--port", "9"},
+				ExposedPorts: []string{"9"},
 			},
 		},
 	}
@@ -48,7 +47,7 @@ func TestEcho(t *testing.T) {
 			t.Parallel()
 			err := test.RunTest(t, tc, p)
 			if err != nil {
-				t.Errorf(err.Error())
+				t.Errorf("test failed: %v", err)
 			}
 		})
 	}

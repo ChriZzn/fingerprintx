@@ -1,4 +1,4 @@
-package scan
+package pluginutils
 
 import (
 	"crypto/tls"

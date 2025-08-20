@@ -22,10 +22,10 @@ import (
 	"github.com/ory/dockertest/v3"
 )
 
-func TestKafkaNew(t *testing.T) {
+func TestKafka(t *testing.T) {
 	testcases := []test.Testcase{
 		{
-			Description: "kafkanew",
+			Description: "kafka",
 			Port:        9092,
 			Protocol:    plugins.TCP,
 			Expected: func(res *plugins.Service) bool {
@@ -37,7 +37,7 @@ func TestKafkaNew(t *testing.T) {
 		},
 	}
 
-	var p *Plugin
+	p := &Plugin{}
 
 	for _, tc := range testcases {
 		tc := tc
@@ -45,7 +45,7 @@ func TestKafkaNew(t *testing.T) {
 			t.Parallel()
 			err := test.RunTest(t, tc, p)
 			if err != nil {
-				t.Errorf(err.Error())
+				t.Errorf("test failed: %v", err)
 			}
 		})
 	}

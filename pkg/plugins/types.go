@@ -98,3 +98,7 @@ type Target struct {
 	Host      string
 	Transport Protocol
 }
+
+func (t Target) String() string {
+	return t.Address.String() + "/" + t.Transport.String()
+}

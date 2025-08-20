@@ -72,5 +72,5 @@ func (p *Plugin) Priority() int {
 }
 
 func (p *Plugin) Ports() []uint16 {
-	return []uint16{7}
+	return []uint16{7, 9}
 }

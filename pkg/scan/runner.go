@@ -3,6 +3,7 @@ package scan
 import (
 	"fmt"
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 	"log"
 	"net"
 )
@@ -18,7 +19,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 			return nil, fmt.Errorf("unable to find plugin for target %v", target)
 		}
 		// connect
-		conn, err := Connect(target)
+		conn, err := pluginutils.Connect(target)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
@@ -28,7 +29,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 	// Bruteforce until the service is found
 	for _, plugin := range pluginMatrix.GetPluginsByTransport(target.Transport) {
 		//connect
-		conn, err := Connect(target)
+		conn, err := pluginutils.Connect(target)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}

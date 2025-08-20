@@ -40,7 +40,7 @@ func readTargets(inputFile string, verbose bool) ([]plugins.Target, error) {
 		readFile = os.Stdin
 	} else if len(targetList) > 0 {
 		for _, target := range targetList {
-			parsedTarget, err := parseTarget(target)
+			parsedTarget, err := ParseTarget(target)
 			if err == nil {
 				targetsList = append(targetsList, parsedTarget)
 			} else if verbose {
@@ -58,7 +58,7 @@ func readTargets(inputFile string, verbose bool) ([]plugins.Target, error) {
 
 	scanner := bufio.NewScanner(readFile)
 	for scanner.Scan() {
-		parsedTarget, err := parseTarget(scanner.Text())
+		parsedTarget, err := ParseTarget(scanner.Text())
 		if err == nil {
 			targetsList = append(targetsList, parsedTarget)
 		} else if verbose {
@@ -68,7 +68,7 @@ func readTargets(inputFile string, verbose bool) ([]plugins.Target, error) {
 	return targetsList, nil
 }
 
-func parseTarget(inputTarget string) (plugins.Target, error) {
+func ParseTarget(inputTarget string) (plugins.Target, error) {
 
 	scanTarget := plugins.Target{}
 	target := strings.Split(strings.TrimSpace(inputTarget), ":")
