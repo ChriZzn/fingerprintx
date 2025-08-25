@@ -16,11 +16,10 @@ package redis
 
 import (
 	"bytes"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -42,7 +41,7 @@ func checkRedis(data []byte) (Info, error) {
 
 	msgLength := len(data)
 	if msgLength < 7 {
-		return Info{}, &utils.InvalidResponseErrorInfo{
+		return Info{}, &shared.InvalidResponseErrorInfo{
 			Service: REDIS,
 			Info:    "too short of a response",
 		}
@@ -53,13 +52,13 @@ func checkRedis(data []byte) (Info, error) {
 			// Valid PONG response means redis server and no auth
 			return Info{AuthRequired: false}, nil
 		}
-		return Info{}, &utils.InvalidResponseErrorInfo{
+		return Info{}, &shared.InvalidResponseErrorInfo{
 			Service: REDIS,
 			Info:    "invalid PONG response",
 		}
 	}
 	if !bytes.Equal(data[:7], noauth[:]) {
-		return Info{}, &utils.InvalidResponseErrorInfo{
+		return Info{}, &shared.InvalidResponseErrorInfo{
 			Service: REDIS,
 			Info:    "invalid Error response",
 		}
@@ -72,7 +71,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	//https://redis.io/commands/ping/
 	// PING is a supported command since 1.0.0
 	// [*1(CR)(NL)$4(CR)(NL)PING(CR)(NL)]
@@ -93,7 +92,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		0x0a,
 	}
 
-	response, err := utils.SendRecv(conn, ping, timeout)
+	response, err := shared.SendRecv(conn, ping, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +107,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	payload := ServiceRedis{
 		AuthRequired: result.AuthRequired,
 	}
-	//todo: ssl
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

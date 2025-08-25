@@ -1,3 +1,5 @@
 package snmp
 
-type ServiceSNMP struct{}
+type ServiceSNMP struct {
+	Version int `json:"version,omitempty"`
+}

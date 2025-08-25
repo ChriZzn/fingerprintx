@@ -1,8 +1,7 @@
-package pluginutils
+package plugins
 
 import (
 	"crypto/tls"
-	"github.com/chrizzn/fingerprintx/pkg/plugins"
 	"net"
 	"time"
 )
@@ -25,24 +24,30 @@ func init() {
 	tlsConfig.MinVersion = tls.VersionSSL30
 }
 
-func Connect(target plugins.Target) (net.Conn, error) {
+func Connect(target Target) (*FingerprintConn, error) {
 	conn, err := connectTLS(target)
 	if err == nil {
-		return conn, nil
+		return &FingerprintConn{Conn: conn}, nil
 	}
-	return connectRAW(target)
+
+	conn, err = connectRAW(target)
+	if err == nil {
+		return &FingerprintConn{Conn: conn}, nil
+	}
+	return nil, err
 }
 
-func connectRAW(target plugins.Target) (net.Conn, error) {
+func connectRAW(target Target) (net.Conn, error) {
 	return dialer.Dial(target.Transport.String(), target.Address.String())
 }
 
-func connectTLS(target plugins.Target) (net.Conn, error) {
+func connectTLS(target Target) (net.Conn, error) {
 	config := &tlsConfig
+
 	if target.Host != "" {
 		c := config.Clone()
 		c.ServerName = target.Host
 		config = c
 	}
-	return tls.DialWithDialer(dialer, "tcp", target.Address.String(), config)
+	return tls.DialWithDialer(dialer, target.Transport.String(), target.Address.String(), config)
 }

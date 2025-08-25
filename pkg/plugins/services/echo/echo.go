@@ -17,11 +17,11 @@ package echo
 import (
 	"bytes"
 	"crypto/rand"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -35,7 +35,7 @@ func isEcho(conn net.Conn, timeout time.Duration) (bool, error) {
 		return false, err
 	}
 
-	response, err := pluginutils.SendRecv(conn, payload, timeout)
+	response, err := shared.SendRecv(conn, payload, timeout)
 	if err != nil {
 		return false, err
 	}
@@ -50,13 +50,13 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	if isEcho, err := isEcho(conn, timeout); !isEcho || err != nil {
 		return nil, nil
 	}
 	payload := ServiceEcho{}
 
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

@@ -18,12 +18,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"hash/crc32"
-	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const STUN = "stun"
@@ -53,7 +52,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	/**
 	 * https://datatracker.ietf.org/doc/html/rfc8489
 	 *
@@ -78,7 +77,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	}
 	_, err := rand.Read(InitialConnectionPackage[8:20]) // generate random transaction ID
 	if err != nil {
-		return nil, &utils.RandomizeError{Message: "transaction ID"}
+		return nil, &shared.RandomizeError{Message: "transaction ID"}
 	}
 	TransactionID := hex.EncodeToString(InitialConnectionPackage[8:20])
 
@@ -90,7 +89,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		fingerprintValue >>= 8
 	}
 
-	response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
+	response, err := shared.SendRecv(conn, InitialConnectionPackage, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -121,20 +120,19 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, nil
 	}
 	payload := ServiceStun{
-		Info: fmt.Sprintf("%s", infoMap),
+		Attributes: infoMap,
 	}
 
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
-
-func parseResponse(response []byte) (map[string]any, error) {
-	attrInfo := make(map[string]any)
+func parseResponse(response []byte) ([]Attribute, error) {
+	var attributes []Attribute
 	idx := MessageHeaderLength
 	length := len(response)
 	for idx < length {
 		// parse attribute type, length
 		if idx+4 > length {
-			return nil, &utils.InvalidResponseErrorInfo{
+			return nil, &shared.InvalidResponseErrorInfo{
 				Service: "OpenVPN",
 				Info:    "invalid attribute T/L header",
 			}
@@ -148,7 +146,7 @@ func parseResponse(response []byte) (map[string]any, error) {
 
 		// parse attribute value
 		if idx+attrLen > length {
-			return nil, &utils.InvalidResponseErrorInfo{
+			return nil, &shared.InvalidResponseErrorInfo{
 				Service: "OpenVPN",
 				Info:    "invalid attribute length",
 			}
@@ -168,15 +166,23 @@ func parseResponse(response []byte) (map[string]any, error) {
 			attrValueStr = hex.EncodeToString(attrValue)
 		}
 
-		// update attribute info map
-		// if attribute appeared more than once, only process first occurence
-		_, exists = attrInfo[attrName]
-		if !exists {
-			attrInfo[attrName] = attrValueStr
+		// Only add if we haven't seen this attribute before
+		found := false
+		for _, attr := range attributes {
+			if attr.Key == attrName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			attributes = append(attributes, Attribute{
+				Key:   attrName,
+				Value: attrValueStr,
+			})
 		}
 	}
 
-	return attrInfo, nil
+	return attributes, nil
 }
 
 func (p *Plugin) Name() string {

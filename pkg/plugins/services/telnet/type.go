@@ -1,5 +1,5 @@
 package telnet
 
 type ServiceTelnet struct {
-	ServerData string `json:"serverData"`
+	ServerData string `json:"serverData,omitempty"`
 }

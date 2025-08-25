@@ -16,11 +16,10 @@ package postgres
 
 import (
 	"encoding/binary"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -100,8 +99,26 @@ func successfulAuth(data []byte) bool {
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	payload := ServicePostgreSQL{}
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	// Try StartTLS first before any other communication
+	if conn.TLS() == nil {
+		// SSL Request Packet (int32 == 80877103)
+		sslReq := make([]byte, 8)
+		binary.BigEndian.PutUint32(sslReq[0:4], 8)        // Message length
+		binary.BigEndian.PutUint32(sslReq[4:8], 80877103) // SSL request code
+
+		response, err := shared.SendRecv(conn, sslReq, timeout)
+		if err == nil && len(response) > 0 {
+			// 'S' indicates server supports SSL
+			if response[0] == 'S' {
+				conn.Upgrade()
+			}
+		}
+	}
+
+	// Now proceed with regular PostgreSQL probe
 	startupPacket := []byte{
 		0x00, 0x00, 0x00, 0x54, 0x00, 0x03, 0x00, 0x00, 0x75, 0x73, 0x65, 0x72, 0x00, 0x70, 0x6f, 0x73,
 		0x74, 0x67, 0x72, 0x65, 0x73, 0x00, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x00, 0x70,
@@ -111,7 +128,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		0x46, 0x38, 0x00, 0x00,
 	}
 
-	response, err := utils.SendRecv(conn, startupPacket, timeout)
+	response, err := shared.SendRecv(conn, startupPacket, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +141,9 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, nil
 	}
 
-	payload := ServicePostgreSQL{
-		AuthRequired: !successfulAuth(response),
-	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	payload.AuthRequired = !successfulAuth(response)
+
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

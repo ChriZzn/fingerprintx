@@ -116,13 +116,13 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	if isIPMI, err := isIPMI(conn, timeout); !isIPMI || err != nil {
 		return nil, nil
 	}
 	payload := ServiceIPMI{}
 
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

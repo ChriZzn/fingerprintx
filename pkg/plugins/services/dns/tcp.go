@@ -2,13 +2,12 @@ package dns
 
 import (
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	"net"
 	"time"
 )
 
 type TCPPlugin struct{}
 
-func (p *TCPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *TCPPlugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	isDNS, err := CheckDNS(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -17,7 +16,7 @@ func (p *TCPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Tar
 	if isDNS {
 		payload := ServiceDNS{}
 
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 	}
 
 	return nil, nil

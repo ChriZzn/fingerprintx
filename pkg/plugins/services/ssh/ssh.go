@@ -20,14 +20,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"io"
 	"math/big"
-	"net"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 	"github.com/chrizzn/fingerprintx/third_party/cryptolib/ssh"
 )
 
@@ -54,7 +53,7 @@ func init() {
 func checkSSH(data []byte) (string, error) {
 	msgLength := len(data)
 	if msgLength < 4 {
-		return "", &utils.InvalidResponseErrorInfo{Service: SSH, Info: "response too short"}
+		return "", &shared.InvalidResponseErrorInfo{Service: SSH, Info: "response too short"}
 	}
 	sshID := []byte("SSH-")
 	if bytes.Equal(data[:4], sshID) {
@@ -67,7 +66,7 @@ func checkSSH(data []byte) (string, error) {
 		}
 	}
 
-	return "", &utils.InvalidResponseErrorInfo{Service: SSH, Info: "invalid banner prefix"}
+	return "", &shared.InvalidResponseErrorInfo{Service: SSH, Info: "invalid banner prefix"}
 }
 
 func checkAlgo(data []byte) (map[string]string, error) {
@@ -189,11 +188,17 @@ func checkAlgo(data []byte) (map[string]string, error) {
 
 	return info, nil
 }
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	var (
+		banner             string
+		passwordAuth       bool
+		algo               map[string]string
+		base64HostKey      string
+		hostKeyType        string
+		hostKeyFingerprint string
+	)
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	response, err := utils.Recv(conn, timeout)
-	passwordAuth := false
-
+	response, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -201,192 +206,167 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, nil
 	}
 
-	banner, err := checkSSH(response)
+	banner, err = checkSSH(response)
 	if err != nil {
 		return nil, err
 	}
 
 	msg := []byte("SSH-2.0-Fingerprintx-SSH2\r\n")
-
-	response, err = utils.SendRecv(conn, msg, timeout)
+	response, err = shared.SendRecv(conn, msg, timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	algo, err := checkAlgo(response)
-	if err != nil {
-		payload := ServiceSSH{
-			Banner: banner,
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
+	algo, err = checkAlgo(response)
+	if err == nil {
+		// check auth methods
+		conf := ssh.ClientConfig{}
+		conf.Timeout = timeout
+		conf.Auth = nil
+		conf.Auth = append(conf.Auth, ssh.Password("admin"))
+		conf.Auth = append(conf.Auth,
+			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+				answers := make([]string, len(questions))
+				for i := range answers {
+					answers[i] = "password"
+				}
+				return answers, nil
+			}),
+		)
 
-	// check auth methods
-	conf := ssh.ClientConfig{}
-	conf.Timeout = timeout
-	conf.Auth = nil
-	conf.Auth = append(conf.Auth, ssh.Password("admin"))
-	conf.Auth = append(conf.Auth,
-		ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-			answers := make([]string, len(questions))
-			for i := range answers {
-				answers[i] = "password"
+		conf.User = "admin"
+		conf.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+		conf.KeyExchanges = append(conf.KeyExchanges,
+			"diffie-hellman-group-exchange-sha256",
+			"diffie-hellman-group-exchange-sha1",
+			"diffie-hellman-group1-sha1",
+			"diffie-hellman-group14-sha1",
+			"diffie-hellman-group14-sha256",
+			"ecdh-sha2-nistp256",
+			"ecdh-sha2-nistp384",
+			"ecdh-sha2-nistp521",
+			"curve25519-sha256@libssh.org",
+			"curve25519-sha256",
+		)
+		conf.Ciphers = append(conf.Ciphers,
+			"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-gcm@openssh.com",
+			"chacha20-poly1305@openssh.com",
+			"arcfour256", "arcfour128", "arcfour",
+			"aes128-cbc",
+			"3des-cbc",
+		)
+
+		authClient, err := ssh.Dial("tcp", target.Address.String(), &conf)
+		if err != nil {
+			passwordAuth = strings.Contains(err.Error(), "password") || strings.Contains(err.Error(), "keyboard-interactive")
+		}
+		if authClient != nil {
+			authClient.Close()
+		}
+
+		sshConfig := &ssh.ClientConfig{}
+		fullConf := *sshConfig
+		fullConf.SetDefaults()
+
+		c := ssh.NewTransport(conn, fullConf.Rand, true)
+		t := ssh.NewHandshakeTransport(c, &fullConf.Config, msg, []byte(banner))
+		sendMsg := ssh.KexInitMsg{
+			KexAlgos:                t.Config.KeyExchanges,
+			CiphersClientServer:     t.Config.Ciphers,
+			CiphersServerClient:     t.Config.Ciphers,
+			MACsClientServer:        t.Config.MACs,
+			MACsServerClient:        t.Config.MACs,
+			ServerHostKeyAlgos:      ssh.SupportedHostKeyAlgos,
+			CompressionClientServer: []string{"none"},
+			CompressionServerClient: []string{"none"},
+		}
+
+		if err = func() error {
+			if _, err := io.ReadFull(rand.Reader, sendMsg.Cookie[:]); err != nil {
+				return err
 			}
-			return answers, nil
-		}),
-	)
 
-	conf.User = "admin"
-	conf.HostKeyCallback = ssh.InsecureIgnoreHostKey()
-	// use all the ciphers supported by the go crypto ssh library
-	conf.KeyExchanges = append(conf.KeyExchanges,
-		"diffie-hellman-group-exchange-sha256",
-		"diffie-hellman-group-exchange-sha1",
-		"diffie-hellman-group1-sha1",
-		"diffie-hellman-group14-sha1",
-		"diffie-hellman-group14-sha256",
-		"ecdh-sha2-nistp256",
-		"ecdh-sha2-nistp384",
-		"ecdh-sha2-nistp521",
-		"curve25519-sha256@libssh.org",
-		"curve25519-sha256",
-	)
-	conf.Ciphers = append(conf.Ciphers,
-		"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-gcm@openssh.com",
-		"chacha20-poly1305@openssh.com",
-		"arcfour256", "arcfour128", "arcfour",
-		"aes128-cbc",
-		"3des-cbc",
-	)
+			if firstKeyExchange := t.SessionID == nil; firstKeyExchange {
+				sendMsg.KexAlgos = make([]string, 0, len(t.Config.KeyExchanges)+1)
+				sendMsg.KexAlgos = append(sendMsg.KexAlgos, t.Config.KeyExchanges...)
+				sendMsg.KexAlgos = append(sendMsg.KexAlgos, "ext-info-c")
+			}
 
-	authClient, err := ssh.Dial("tcp", target.Address.String(), &conf)
+			packet := ssh.Marshal(sendMsg)
+			packetCopy := make([]byte, len(packet))
+			copy(packetCopy, packet)
 
-	if err != nil {
-		passwordAuth = strings.Contains(err.Error(), "password") || strings.Contains(err.Error(), "keyboard-interactive")
-	}
+			if err := ssh.PushPacket(t.HandshakeTransport, packetCopy); err != nil {
+				return err
+			}
 
-	if authClient != nil {
-		authClient.Close()
-	}
+			cookie, err := hex.DecodeString(algo["cookie"])
+			if err != nil {
+				return err
+			}
 
-	sshConfig := &ssh.ClientConfig{}
-	fullConf := *sshConfig
-	fullConf.SetDefaults()
+			var ret [16]byte
+			copy(ret[:], cookie)
 
-	c := ssh.NewTransport(conn, fullConf.Rand, true)
-	t := ssh.NewHandshakeTransport(c, &fullConf.Config, msg, []byte(banner))
-	sendMsg := ssh.KexInitMsg{
-		KexAlgos:                t.Config.KeyExchanges,
-		CiphersClientServer:     t.Config.Ciphers,
-		CiphersServerClient:     t.Config.Ciphers,
-		MACsClientServer:        t.Config.MACs,
-		MACsServerClient:        t.Config.MACs,
-		ServerHostKeyAlgos:      ssh.SupportedHostKeyAlgos,
-		CompressionClientServer: []string{"none"},
-		CompressionServerClient: []string{"none"},
-	}
-	_, err = io.ReadFull(rand.Reader, sendMsg.Cookie[:])
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
+			otherInit := &ssh.KexInitMsg{
+				KexAlgos:                strings.Split(algo["KexAlgos"], ","),
+				Cookie:                  ret,
+				ServerHostKeyAlgos:      strings.Split(algo["ServerHostKeyAlgos"], ","),
+				CiphersClientServer:     strings.Split(algo["CiphersClientServer"], ","),
+				CiphersServerClient:     strings.Split(algo["CiphersServerClient"], ","),
+				MACsClientServer:        strings.Split(algo["MACsClientServer"], ","),
+				MACsServerClient:        strings.Split(algo["MACsServerClient"], ","),
+				CompressionClientServer: strings.Split(algo["CompressionClientServer"], ","),
+				CompressionServerClient: strings.Split(algo["CompressionServerClient"], ","),
+				FirstKexFollows:         false,
+				Reserved:                0,
+			}
+
+			t.Algorithms, err = ssh.FindAgreedAlgorithms(false, &sendMsg, otherInit)
+			if err != nil {
+				return err
+			}
+
+			magics := ssh.HandshakeMagics{
+				ClientVersion: t.ClientVersion,
+				ServerVersion: t.ServerVersion,
+				ClientKexInit: packet,
+				ServerKexInit: response[5 : len(response)-10],
+			}
+
+			kex := ssh.GetKex(t.Algorithms.Kex)
+			result, err := ssh.Clients(t, kex, &magics)
+			if err != nil {
+				return err
+			}
+
+			hostKey, err := ssh.ParsePublicKey(result.HostKey)
+			if err != nil {
+				return err
+			}
+
+			hostKeyFingerprint = ssh.FingerprintSHA256(hostKey)
+			base64HostKey = base64.StdEncoding.EncodeToString(result.HostKey)
+			hostKeyType = hostKey.Type()
+			return nil
+		}(); err != nil {
+			// Error occurred during the handshake process - continue with basic info
 		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
 	}
-	if firstKeyExchange := t.SessionID == nil; firstKeyExchange {
-		sendMsg.KexAlgos = make([]string, 0, len(t.Config.KeyExchanges)+1)
-		sendMsg.KexAlgos = append(sendMsg.KexAlgos, t.Config.KeyExchanges...)
-		sendMsg.KexAlgos = append(sendMsg.KexAlgos, "ext-info-c")
-	}
-	packet := ssh.Marshal(sendMsg)
-	packetCopy := make([]byte, len(packet))
-	copy(packetCopy, packet)
-
-	err = ssh.PushPacket(t.HandshakeTransport, packetCopy)
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
-
-	cookie, err := hex.DecodeString(algo["cookie"])
-	var ret [16]byte
-	copy(ret[:], cookie)
-
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
-	otherInit := &ssh.KexInitMsg{
-		KexAlgos:                strings.Split(algo["KexAlgos"], ","),
-		Cookie:                  ret,
-		ServerHostKeyAlgos:      strings.Split(algo["ServerHostKeyAlgos"], ","),
-		CiphersClientServer:     strings.Split(algo["CiphersClientServer"], ","),
-		CiphersServerClient:     strings.Split(algo["CiphersServerClient"], ","),
-		MACsClientServer:        strings.Split(algo["MACsClientServer"], ","),
-		MACsServerClient:        strings.Split(algo["MACsServerClient"], ","),
-		CompressionClientServer: strings.Split(algo["CompressionClientServer"], ","),
-		CompressionServerClient: strings.Split(algo["CompressionServerClient"], ","),
-		FirstKexFollows:         false,
-		Reserved:                0,
-	}
-
-	t.Algorithms, err = ssh.FindAgreedAlgorithms(false, &sendMsg, otherInit)
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
-	magics := ssh.HandshakeMagics{
-		ClientVersion: t.ClientVersion,
-		ServerVersion: t.ServerVersion,
-		ClientKexInit: packet,
-		ServerKexInit: response[5 : len(response)-10],
-	}
-
-	kex := ssh.GetKex(t.Algorithms.Kex)
-
-	result, err := ssh.Clients(t, kex, &magics)
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
-	hostKey, err := ssh.ParsePublicKey(result.HostKey)
-	if err != nil {
-		payload := ServiceSSH{
-			Banner:              banner,
-			PasswordAuthEnabled: passwordAuth,
-			Algo:                fmt.Sprintf("%s", algo),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
-	fingerprint := ssh.FingerprintSHA256(hostKey)
-	base64HostKey := base64.StdEncoding.EncodeToString(result.HostKey)
 
 	payload := ServiceSSH{
 		Banner:              banner,
 		PasswordAuthEnabled: passwordAuth,
 		Algo:                fmt.Sprintf("%s", algo),
-		HostKey:             base64HostKey,
-		HostKeyType:         hostKey.Type(),
-		HostKeyFingerprint:  fingerprint,
 	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+
+	if base64HostKey != "" {
+		payload.HostKey = base64HostKey
+		payload.HostKeyType = hostKeyType
+		payload.HostKeyFingerprint = hostKeyFingerprint
+	}
+
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {
@@ -402,5 +382,5 @@ func (p *Plugin) Priority() int {
 }
 
 func (p *Plugin) Ports() []uint16 {
-	return []uint16{22, 2222, 2244}
+	return []uint16{22, 2222, 22222, 2244, 24442}
 }

@@ -16,11 +16,11 @@ package mssql
 
 import (
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 // Potential values for PLOptionToken
@@ -118,12 +118,12 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 		0x00,
 	}
 
-	response, err := utils.SendRecv(conn, preLoginPacket, timeout)
+	response, err := shared.SendRecv(conn, preLoginPacket, timeout)
 	if err != nil {
 		return Data{}, false, err
 	}
 	if len(response) == 0 {
-		return Data{}, true, &utils.ServerNotEnable{}
+		return Data{}, true, &shared.ServerNotEnable{}
 	}
 
 	/*
@@ -178,21 +178,21 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 	// The TDS header is eight bytes so any response less than this can be safely classified
 	// as invalid (i.e. not MSSQL/TDS)
 	if len(response) < 8 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "response is too short to be a valid TDS packet header",
 		}
 	}
 
 	if response[0] != 0x04 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "type should be set to tabular result for a valid TDS packet",
 		}
 	}
 
 	if response[1] != 0x01 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "expect a status of one (end of message) for tabular result packet",
 		}
@@ -200,28 +200,28 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 
 	packetLength := int(uint32(response[3]) | uint32(response[2])<<8)
 	if len(response) != packetLength {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "packet length does not match length read",
 		}
 	}
 
 	if response[4] != 0x00 || response[5] != 0x00 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "value for SPID should always be zero",
 		}
 	}
 
 	if response[6] != 0x01 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "value for packet id should always be one",
 		}
 	}
 
 	if response[7] != 0x00 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "value for window should always be zero",
 		}
@@ -244,7 +244,7 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 			if plOffset+plOptionLength < uint32(len(response)) {
 				plOptionData = response[plOffset+8 : plOffset+8+plOptionLength]
 			} else {
-				return Data{}, true, &utils.InvalidResponseErrorInfo{
+				return Data{}, true, &shared.InvalidResponseErrorInfo{
 					Service: MSSQL,
 					Info:    "server returned an invalid PLOffset or PLOptionLength"}
 			}
@@ -262,28 +262,28 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 	}
 
 	if response[position] != 0xFF {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "list of option tokens should be terminated by 0xff",
 		}
 	}
 
 	if len(optionTokens) < 1 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "there should be at least one option token since VERSION is required",
 		}
 	}
 
 	if optionTokens[0].PLOptionToken != 0x00 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "TDS requires VERSION to be the first PLOptionToken value",
 		}
 	}
 
 	if optionTokens[0].PLOptionLength != 0x06 {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
+		return Data{}, true, &shared.InvalidResponseErrorInfo{
 			Service: MSSQL,
 			Info:    "version field should be fixed bytes",
 		}
@@ -302,7 +302,10 @@ func DetectMSSQL(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 	return Data{Version: version}, true, nil
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+
+	service := ServiceMSSQL{}
+
 	data, check, err := DetectMSSQL(conn, timeout)
 	if check && err != nil {
 		return nil, nil
@@ -310,9 +313,8 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, err
 	}
 
-	//TODO: SSL missing + Version: data.Version
-	fmt.Println(data)
-	return plugins.CreateServiceFrom(target, p.Name(), ServiceMSSQL{}, nil), nil
+	service.Version = data.Version
+	return plugins.CreateServiceFrom(target, p.Name(), service, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

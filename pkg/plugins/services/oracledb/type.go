@@ -1,5 +1,5 @@
 package oracledb
 
 type ServiceOracle struct {
-	Info string `json:"info"`
+	Info string `json:"info,omitempty"`
 }

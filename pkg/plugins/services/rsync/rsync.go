@@ -15,13 +15,11 @@
 package rsync
 
 import (
-	"fmt"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -48,7 +46,7 @@ func init() {
    This program was tested with docker run -p 873:873 vimagick/rsyncd
    The default port for rsyncd is 873
 */
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	requestBytes := []byte{
 		// ascii "@RSYNCD:" magic header
 		0x40, 0x52, 0x53, 0x59, 0x54, 0x43, 0x44, 0x3a,
@@ -60,7 +58,9 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		0x0a,
 	}
 
-	response, err := utils.SendRecv(conn, requestBytes, timeout)
+	service := ServiceRsync{}
+
+	response, err := shared.SendRecv(conn, requestBytes, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +70,8 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 
 	if string(response[:RsyncMagicHeaderLength]) == "@RSYNCD:" {
 		version := strings.Split(string(response[RsyncMagicHeaderLength+1:]), "\n")[0]
-		//TODO: version
-		fmt.Println(version)
-		return plugins.CreateServiceFrom(target, p.Name(), ServiceRsync{}, nil), nil
+		service.Version = version
+		return plugins.CreateServiceFrom(target, p.Name(), service, conn.TLS()), nil
 	}
 
 	return nil, nil

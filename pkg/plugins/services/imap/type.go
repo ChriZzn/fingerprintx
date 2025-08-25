@@ -1,5 +1,5 @@
 package imap
 
 type ServiceIMAP struct {
-	Banner string `json:"banner"`
+	Banner string `json:"banner,omitempty"`
 }

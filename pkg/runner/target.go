@@ -91,7 +91,7 @@ func ParseTarget(inputTarget string) (plugins.Target, error) {
 	case "udp":
 		protocol = plugins.UDP
 	default:
-		panic("invalid transport specified")
+		return plugins.Target{}, fmt.Errorf("invalid transport specified")
 	}
 
 	port, err := strconv.ParseUint(portStr, 10, 16)

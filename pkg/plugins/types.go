@@ -40,7 +40,7 @@ type PluginID struct {
 }
 
 type Plugin interface {
-	Run(net.Conn, time.Duration, Target) (*Service, error)
+	Run(*FingerprintConn, time.Duration, Target) (*Service, error)
 	Name() string
 	Type() Protocol
 	Priority() int
@@ -101,4 +101,29 @@ type Target struct {
 
 func (t Target) String() string {
 	return t.Address.String() + "/" + t.Transport.String()
+}
+
+// Connection Struct
+
+type FingerprintConn struct {
+	net.Conn
+}
+
+func (c *FingerprintConn) TLS() *tls.ConnectionState {
+	if tlsConn, ok := c.Conn.(*tls.Conn); ok {
+		state := tlsConn.ConnectionState()
+		return &state
+	}
+	return nil
+}
+
+func (c *FingerprintConn) Upgrade() {
+
+	conn := c.Conn.(*net.TCPConn)
+
+	t := tls.Client(conn, &tlsConfig)
+	err := t.Handshake()
+	if err == nil {
+		c.Conn = t
+	}
 }

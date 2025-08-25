@@ -15,12 +15,10 @@
 package vnc
 
 import (
-	"fmt"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -38,40 +36,47 @@ const VNC = "vnc"
 //	zeros:
 //
 //	    RFB 003.008\n (hex 52 46 42 20 30 30 33 2e 30 30 38 0a)
-func checkVNC(data []byte) (string, error) {
+func checkVNC(data []byte) (*ServiceVNC, error) {
 	msgLength := len(data)
-	if msgLength != 12 {
-		return "", &utils.InvalidResponseErrorInfo{
+	if msgLength < 12 {
+		return nil, &shared.InvalidResponseErrorInfo{
 			Service: VNC,
 			Info:    "incorrect message length",
 		}
 	}
 
-	// starts with RFB
+	// Check RFB preamble
 	if data[0] != 0x52 || data[1] != 0x46 || data[2] != 0x42 {
-		return "", &utils.InvalidResponseErrorInfo{
+		return nil, &shared.InvalidResponseErrorInfo{
 			Service: VNC,
 			Info:    "invalid RFB preamble",
 		}
 	}
 
-	// 8th element is '.' and the last is '\n'
+	// Check protocol version format
 	if data[7] != 0x2e || data[11] != 0x0a {
-		return "", &utils.InvalidResponseErrorInfo{
+		return nil, &shared.InvalidResponseErrorInfo{
 			Service: VNC,
 			Info:    "missing ProtocolVersion characters",
 		}
 	}
 
-	return string(data[4:11]), nil
+	// Extract protocol version
+	protocolVersion := string(data[4:11])
+
+	vnc := &ServiceVNC{
+		ProtocolVersion: protocolVersion,
+	}
+
+	return vnc, nil
 }
 
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	response, err := utils.Recv(conn, timeout)
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	response, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -83,9 +88,8 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	if err != nil {
 		return nil, nil
 	}
-	fmt.Println(info) //TODO enrich type
 
-	return plugins.CreateServiceFrom(target, p.Name(), ServiceVNC{}, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), info, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

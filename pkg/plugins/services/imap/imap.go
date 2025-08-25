@@ -15,12 +15,12 @@
 package imap
 
 import (
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -72,12 +72,12 @@ func checkCapability(conn net.Conn, timeout time.Duration) (bool, error) {
 	tag := "7FYWU8I4"
 	msg := []byte(tag + " CAPABILITY\r\n")
 
-	response, err := utils.SendRecv(conn, msg, timeout)
+	response, err := shared.SendRecv(conn, msg, timeout)
 	if err != nil {
 		return false, err
 	}
 	if len(response) == 0 {
-		return true, &utils.ServerNotEnable{}
+		return true, &shared.ServerNotEnable{}
 	}
 
 	/* Sometimes servers send all the data in one packet
@@ -85,7 +85,7 @@ func checkCapability(conn net.Conn, timeout time.Duration) (bool, error) {
 	srvResponses := strings.Split(string(response), "\r\n")
 
 	if len(srvResponses) < 2 {
-		return true, &utils.InvalidResponseError{Service: IMAP}
+		return true, &shared.InvalidResponseError{Service: IMAP}
 	}
 
 	capData := strings.ToUpper(srvResponses[0])
@@ -93,12 +93,12 @@ func checkCapability(conn net.Conn, timeout time.Duration) (bool, error) {
 
 	// If we only got 1 IMAP response, there is probably another on the way
 	if status == "" {
-		response, err := utils.Recv(conn, timeout)
+		response, err := shared.Recv(conn, timeout)
 		if err != nil {
 			return false, err
 		}
 		if len(response) == 0 {
-			return true, &utils.ServerNotEnable{}
+			return true, &shared.ServerNotEnable{}
 		}
 		status = string(response)
 	}
@@ -106,7 +106,7 @@ func checkCapability(conn net.Conn, timeout time.Duration) (bool, error) {
 	/* Make sure server response matches RFC 3501, pages 68 (capability) and 88
 	/* (response-tagged) */
 	if !strings.HasPrefix(capData, "* CAPABILITY") || !strings.HasPrefix(status, tag) {
-		return true, &utils.InvalidResponseErrorInfo{Service: IMAP, Info: "missing capability info"}
+		return true, &shared.InvalidResponseErrorInfo{Service: IMAP, Info: "missing capability info"}
 	}
 
 	// imap
@@ -116,16 +116,16 @@ func checkCapability(conn net.Conn, timeout time.Duration) (bool, error) {
 func DetectIMAP(conn net.Conn, timeout time.Duration) (string, bool, error) {
 	/* Server has to specify a greeting upon completing the TCP handshake as
 	/* per RFC 3501 (page 14). If we don't get a greeting, this ain't IMAP. */
-	response, err := utils.Recv(conn, timeout)
+	response, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return "", false, err
 	}
 	if len(response) == 0 {
-		return "", true, &utils.ServerNotEnable{}
+		return "", true, &shared.ServerNotEnable{}
 	}
 
 	if !checkGreeting(response) {
-		return "", true, &utils.InvalidResponseErrorInfo{
+		return "", true, &shared.InvalidResponseErrorInfo{
 			Service: IMAP,
 			Info:    "did not receive expected imap greeting banner",
 		}
@@ -134,7 +134,7 @@ func DetectIMAP(conn net.Conn, timeout time.Duration) (string, bool, error) {
 	return string(response[5:]), check, err
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	result, check, err := DetectIMAP(conn, timeout)
 	if err != nil && check { // service is not running IMAP
 		return nil, nil
@@ -146,7 +146,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	payload := ServiceIMAP{
 		Banner: result,
 	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

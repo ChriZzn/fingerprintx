@@ -17,7 +17,6 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 	"log"
 	"net/netip"
 	"strconv"
@@ -83,7 +82,7 @@ func RunTest(t *testing.T, tc Testcase, p plugins.Plugin) error {
 			return fmt.Errorf("timeout waiting for container")
 		default:
 			time.Sleep(1 * time.Second)
-			conn, dialErr := pluginutils.Connect(testTarget)
+			conn, dialErr := plugins.Connect(testTarget)
 			if dialErr != nil {
 				return dialErr
 			}
@@ -96,7 +95,7 @@ func RunTest(t *testing.T, tc Testcase, p plugins.Plugin) error {
 	require.NoError(t, err, "failed to connect to test container")
 
 	fmt.Printf("opening connection: %s\n", testTarget.String())
-	conn, err := pluginutils.Connect(testTarget)
+	conn, err := plugins.Connect(testTarget)
 	require.NoError(t, err, "failed to open connection to container")
 
 	result, err := p.Run(conn, time.Second*3, testTarget)

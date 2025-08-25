@@ -16,12 +16,11 @@ package netbios
 
 import (
 	"crypto/rand"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const NETBIOS = "netbios-ns"
@@ -32,11 +31,11 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	transactionID := make([]byte, 2)
 	_, err := rand.Read(transactionID)
 	if err != nil {
-		return nil, &utils.RandomizeError{Message: "Transaction ID"}
+		return nil, &shared.RandomizeError{Message: "Transaction ID"}
 	}
 	InitialConnectionPackage := append(transactionID, []byte{ //nolint:gocritic
 		// Transaction ID
@@ -49,7 +48,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		0x00, 0x01,
 	}...)
 
-	response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
+	response, err := shared.SendRecv(conn, InitialConnectionPackage, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +65,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	payload := ServiceNetbios{
 		NetBIOSName: string(response[stringBegin:stringEnd]),
 	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

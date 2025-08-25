@@ -17,11 +17,10 @@ package modbus
 import (
 	"bytes"
 	"crypto/rand"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const (
@@ -61,11 +60,11 @@ const MODBUS = "modbus"
    Initial testing done with `docker run -it -p 502:5020 oitc/modbus-server:latest`
    The default TCP port is 502, but this is unofficial.
 */
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	transactionID := make([]byte, 2)
 	_, err := rand.Read(transactionID)
 	if err != nil {
-		return nil, &utils.RandomizeError{Message: "Transaction ID"}
+		return nil, &shared.RandomizeError{Message: "Transaction ID"}
 	}
 
 	// Read Discrete Input request
@@ -88,7 +87,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 
 	requestBytes = append(transactionID, requestBytes...)
 
-	response, err := utils.SendRecv(conn, requestBytes, timeout)
+	response, err := shared.SendRecv(conn, requestBytes, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +100,10 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		// successful request, validate contents
 		if response[ModbusHeaderLength] == ModbusDiscreteInputCode {
 			if response[ModbusHeaderLength+1] == 1 && (response[ModbusHeaderLength+2]>>1) == 0x00 {
-				return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, nil), nil
+				return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, conn.TLS()), nil
 			}
 		} else if response[ModbusHeaderLength] == ModbusDiscreteInputCode+ModbusErrorAddend {
-			return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, nil), nil
+			return plugins.CreateServiceFrom(target, p.Name(), ServiceModbus{}, conn.TLS()), nil
 		}
 	}
 	return nil, nil

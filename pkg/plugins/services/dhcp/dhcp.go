@@ -18,12 +18,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math/big"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const DHCP = "dhcp"
@@ -236,125 +236,139 @@ func ipParse(options []byte) []string {
 	return ipStrList
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	// Initialize result
+	var result *plugins.Service
+
+	// Parse local IP
 	sliceIP := net.ParseIP("127.0.0.1")
 	if sliceIP == nil {
-		return nil, &utils.InvalidAddrProvided{Service: DHCP}
+		return nil, &shared.InvalidAddrProvided{Service: DHCP}
+	}
+	LocalIP := []byte{sliceIP[12], sliceIP[13], sliceIP[14], sliceIP[15]}
+
+	// Generate transaction ID
+	transactionID := make([]byte, 4)
+	if _, err := rand.Read(transactionID); err != nil {
+		return nil, &shared.RandomizeError{Message: "Transaction ID"}
 	}
 
-	LocalIP := []byte{sliceIP[12], sliceIP[13], sliceIP[14], sliceIP[15]}
-	InitialConnectionPackage := []byte{
+	// Generate client MAC
+	ClientMAC := make([]byte, 6)
+	if _, err := rand.Read(ClientMAC); err != nil {
+		return nil, &shared.RandomizeError{Message: "ClientMAC"}
+	}
+
+	// Build the DHCP request packet
+	packet := buildDHCPPacket(LocalIP, transactionID, ClientMAC)
+
+	// Send request and receive response
+	response, err := shared.SendRecv(conn, packet, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate response
+	if len(response) < 8 || !bytes.Equal(transactionID, response[4:8]) {
+		return nil, nil
+	}
+
+	// Process DHCP options
+	if len(response) > 240 {
+		options := response[240:]
+		if optionList, ok := parseDHCPOptions(options); ok {
+			payload := ServiceDHCP{
+				Option: fmt.Sprintf("%s", optionList),
+			}
+			result = plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS())
+		}
+	}
+
+	return result, nil
+}
+
+// Helper function to build the DHCP packet
+func buildDHCPPacket(LocalIP, transactionID, ClientMAC []byte) []byte {
+	packet := []byte{
 		0x01, // Message type: Boot Request (1)
 		0x01, // Hardware type: Ethernet (0x01)
 		0x06, // Hardware address length: 6
 		0x01, // Hops: 1
 	}
-	transactionID := make([]byte, 4)
-	_, err := rand.Read(transactionID)
-	if err != nil {
-		return nil, &utils.RandomizeError{Message: "Transaction ID"}
-	}
-	InitialConnectionPackage = append(InitialConnectionPackage, transactionID...)
-	SecondPartConnectionPackage := []byte{
+
+	// Add transaction ID
+	packet = append(packet, transactionID...)
+
+	// Add basic fields
+	packet = append(packet, []byte{
 		0x00, 0x00, // Seconds elapsed: 0
 		0x00, 0x00, // Bootp flags: 0x0000 (Unicast)
-	}
-	InitialConnectionPackage = append(InitialConnectionPackage, SecondPartConnectionPackage...)
-	IPConnectionPackage := []byte{
-		0x00, 0x00, 0x00, 0x00, // Client IP address: 0.0.0.0
-		0x00, 0x00, 0x00, 0x00, // Your (client) IP address: 0.0.0.0
-		0x00, 0x00, 0x00, 0x00, // Next server IP address: 0.0.0.0
-	}
-	InitialConnectionPackage = append(InitialConnectionPackage, IPConnectionPackage...)
-	InitialConnectionPackage = append(InitialConnectionPackage, LocalIP...) // Relay server IP address: LocalIP
-	ClientMAC := make([]byte, 6)
-	_, err = rand.Read(ClientMAC)
-	if err != nil {
-		return nil, &utils.RandomizeError{Message: "ClientMAC"}
-	}
-	InitialConnectionPackage = append(InitialConnectionPackage, ClientMAC...)
-	ThirdPartConnectionPackage := []byte{
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Client hardware address padding
-		// Server host name
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// Boot File name
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		// Client IP, Your IP, Next server IP (all zeros)
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+	}...)
 
+	// Add Local IP and Client MAC
+	packet = append(packet, LocalIP...)
+	packet = append(packet, ClientMAC...)
+
+	// Add padding and options
+	packet = append(packet, make([]byte, 202)...) // Padding zeros
+	packet = append(packet, []byte{
 		0x63, 0x82, 0x53, 0x63, // Magic cookie: DHCP
-
 		0x35, 0x01, 0x01, // Option: (53) DHCP Message Type (Discover)
-	}
-	InitialConnectionPackage = append(InitialConnectionPackage, ThirdPartConnectionPackage...)
-	InitialConnectionPackage = append(InitialConnectionPackage, 0xff) // Option: (255) End
+		0xff, // Option: (255) End
+	}...)
 
-	response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
-	if err != nil {
-		return nil, err
+	return packet
+}
+
+// Helper function to parse DHCP options
+func parseDHCPOptions(options []byte) (map[string]any, bool) {
+	if len(options) == 0 || options[len(options)-1] != 255 {
+		return nil, false
 	}
-	if len(response) < 8 {
-		return nil, nil
-	}
-	// https://ecanet.ir/dhcp-option-list/
-	if bytes.Equal(transactionID, response[4:8]) {
-		if len(response) <= 240 && response[len(response)-1] != 255 {
-			return nil, nil
+
+	signature := getSignatures()
+	optionList := make(map[string]any)
+
+	for int(options[0]) != 255 {
+		if len(options) < int(options[1])+2 {
+			return optionList, true
 		}
 
-		signature := getSignatures()
-		options := response[240:]
+		code := int(options[0])
+		length := int(options[1])
+		data := options[2 : 2+length]
 
-		optionList := map[string]any{}
-		for int(options[0]) != 255 {
-			if len(options) < int(options[1])+2 {
-				// packet corruption
-				payload := ServiceDHCP{
-					Option: fmt.Sprintf("%s", optionList),
-				}
-				return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+		switch code {
+		case 51, 58, 59:
+			optionList[signature[code]] = big.NewInt(0).SetBytes(data).Uint64()
+		case 119:
+			optionList[signature[code]] = hostnameParse(options)
+		case 15:
+			optionList[signature[code]] = string(data)
+		case 1:
+			ipList := ipParse(options)
+			if len(ipList) == 1 {
+				optionList[signature[code]] = ipList[0]
+			} else {
+				optionList[signature[code]] = ipList
 			}
-			c := int(options[0])
-			switch c {
-			case 51, 58, 59:
-				optionList[signature[c]] = big.NewInt(0).SetBytes(options[2 : 2+int(options[1])]).Uint64()
-			case 119:
-				outList := hostnameParse(options)
-				optionList[signature[c]] = outList
-			case 15:
-				optionList[signature[c]] = string(options[2 : 2+int(options[1])])
-			case 1:
-				ipStrList := ipParse(options)
-				optionList[signature[c]] = ipStrList
-				if len(ipStrList) == 1 {
-					optionList[signature[c]] = ipStrList[0]
-				}
-			case 3, 6, 28, 42, 44, 54:
-				ipStrList := ipParse(options)
-				optionList[signature[c]] = ipStrList
-			default:
-				if int(options[1]) == 1 {
-					optionList[signature[c]] = int(options[2])
-				} else {
-					optionList[signature[c]] = options[2 : 2+int(options[1])]
-				}
+		case 3, 6, 28, 42, 44, 54:
+			optionList[signature[code]] = ipParse(options)
+		default:
+			if length == 1 {
+				optionList[signature[code]] = int(data[0])
+			} else {
+				optionList[signature[code]] = data
 			}
-			options = options[2+int(options[1]):]
 		}
-		payload := ServiceDHCP{
-			Option: fmt.Sprintf("%s", optionList),
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+		options = options[2+length:]
 	}
-	return nil, nil
+
+	return optionList, true
 }
 
 func (p *Plugin) Name() string {
@@ -370,5 +384,5 @@ func (p *Plugin) Priority() int {
 }
 
 func (p *Plugin) Ports() []uint16 {
-	return []uint16{67}
+	return []uint16{67, 68}
 }

@@ -1,3 +1,4 @@
 package ldap
 
-type ServiceLDAP struct{}
+type ServiceLDAP struct {
+}

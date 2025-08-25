@@ -15,14 +15,13 @@
 package rtsp
 
 import (
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const (
@@ -39,34 +38,33 @@ const (
 type Plugin struct{}
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	plugins.RegisterPlugin(&Plugin{})
 }
 
 /*
-   rtsp is a media control protocol used to control the flow of data from a real time
-   data streaming protocol. rtsp itself does not transport any data. The structure of rtsp
-   requests is very similar to that of http requests.
+rtsp is a media control protocol used to control the flow of data from a real time
+data streaming protocol. rtsp itself does not transport any data. The structure of rtsp
+requests is very similar to that of http requests.
 
-   To detect the presence of RTSP, this program sends an OPTIONS request, and then validates
-   the returned header and cseq value.
+To detect the presence of RTSP, this program sends an OPTIONS request, and then validates
+the returned header and cseq value.
 
-   This program was tested with docker run -p 554:8554 aler9/rtsp-simple-server.
-   The default port for rtsp is 554.
+This program was tested with docker run -p 554:8554 aler9/rtsp-simple-server.
+The default port for rtsp is 554.
 */
-
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	cseq := strconv.Itoa(rand.Intn(10000)) //nolint:gosec
 
+	// Use the actual target host instead of hardcoded example.com
 	requestString := strings.Join([]string{
-		"OPTIONS rtsp://example.com RTSP/1.0\r\n",
-		"Cseq: ", cseq, "\r\n",
+		"OPTIONS rtsp://", target.Address.String(), " RTSP/1.0\r\n",
+		"CSeq: ", cseq, "\r\n",
 		"\r\n",
 	}, "")
 
 	requestBytes := []byte(requestString)
 
-	responseBytes, err := utils.SendRecv(conn, requestBytes, timeout)
+	responseBytes, err := shared.SendRecv(conn, requestBytes, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -75,41 +73,37 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	}
 	response := string(responseBytes)
 
+	// Check minimum response length
 	if len(response) < RtspMagicHeaderLength {
 		return nil, nil
 	}
-	if string(response[:RtspMagicHeaderLength]) == RtspMagicHeader {
-		cseqStart := strings.Index(response, RtspCseqHeader)
-		if cseqStart == -1 {
-			return nil, nil
-		}
 
-		cseqValueStart := cseqStart + RtspCseqHeaderLength
-		if response[cseqValueStart:cseqValueStart+len(cseq)+RtspNewlineLength] != cseq+"\r\n" {
-			return nil, nil
-		}
-
-		serverStart := strings.Index(response, RtspServerHeader)
-		if serverStart == -1 {
-			return nil, nil
-		}
-
-		serverValueStart := serverStart + RtspServerHeaderLength
-		serverValueEnd := strings.Index(response[serverValueStart:], "\r\n")
-		if serverValueStart+serverValueEnd >= len(response) {
-			return nil, nil
-		}
-
-		serverinfo := response[serverValueStart : serverValueStart+serverValueEnd]
-		payload := ServiceRtsp{
-			ServerInfo: serverinfo,
-		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	// Verify RTSP header
+	if !strings.HasPrefix(response, RtspMagicHeader) {
+		return nil, nil
 	}
 
-	return nil, nil
-}
+	// Parse CSeq
+	cseqStart := strings.Index(response, RtspCseqHeader)
+	if cseqStart == -1 {
+		return nil, nil
+	}
 
+	cseqValueStart := cseqStart + RtspCseqHeaderLength
+	cseqEnd := strings.Index(response[cseqValueStart:], "\r\n")
+	if cseqEnd == -1 {
+		return nil, nil
+	}
+	responseCseq := strings.TrimSpace(response[cseqValueStart : cseqValueStart+cseqEnd])
+	if responseCseq != cseq {
+		return nil, nil
+	}
+
+	payload := ServiceRtsp{}
+	payload.ServerInfo = strings.TrimSpace(response)
+
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
+}
 func (p *Plugin) Name() string {
 	return RTSP
 }

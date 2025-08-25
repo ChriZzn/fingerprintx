@@ -18,15 +18,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math/big"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -235,12 +234,12 @@ func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	addr := strings.Split(conn.RemoteAddr().String(), ":")
 	ip, port := addr[0], addr[1]
 	request := checkForOracle(ip, port)
 
-	response, err := utils.SendRecv(conn, request, timeout)
+	response, err := shared.SendRecv(conn, request, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +252,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		payload := ServiceOracle{
 			Info: oracleInfo,
 		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 	}
 	return nil, nil
 }

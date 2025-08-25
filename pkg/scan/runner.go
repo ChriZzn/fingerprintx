@@ -3,9 +3,7 @@ package scan
 import (
 	"fmt"
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 	"log"
-	"net"
 )
 
 func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) {
@@ -19,7 +17,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 			return nil, fmt.Errorf("unable to find plugin for target %v", target)
 		}
 		// connect
-		conn, err := pluginutils.Connect(target)
+		conn, err := plugins.Connect(target)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
@@ -29,7 +27,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 	// Bruteforce until the service is found
 	for _, plugin := range pluginMatrix.GetPluginsByTransport(target.Transport) {
 		//connect
-		conn, err := pluginutils.Connect(target)
+		conn, err := plugins.Connect(target)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
@@ -50,7 +48,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 // It logs the operation's start and completion if verbose mode is enabled in the configuration.
 // The function returns the service information obtained from the plugin or an error if the operation fails.
 func runPlugin(
-	conn net.Conn,
+	conn *plugins.FingerprintConn,
 	target plugins.Target,
 	config *Config,
 	plugin plugins.Plugin,
@@ -66,6 +64,7 @@ func runPlugin(
 	}
 
 	result, err := plugin.Run(conn, config.DefaultTimeout, target)
+	//TODO: FALL BACK FOR NONE/uknown/just SSL Plugin ?? (185.8.24.152:23)
 
 	// Log probe completion.
 	if config.Verbose {

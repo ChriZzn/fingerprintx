@@ -15,12 +15,12 @@
 package ftp
 
 import (
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 var ftpResponse = regexp.MustCompile(`^\d{3}[- ](.*)\r`)
@@ -33,25 +33,47 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	response, err := utils.Recv(conn, timeout)
-	if err != nil {
-		return nil, err
-	}
-	if len(response) == 0 {
-		return nil, nil
-	}
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 
-	matches := ftpResponse.FindStringSubmatch(string(response))
-	if matches == nil {
+	// Initial banner read
+	response, err := shared.Recv(conn, timeout)
+	if len(response) == 0 || err != nil {
 		return nil, nil
 	}
+	b := strings.Split(string(response), "\r\n")
+	trace := string(response)
+
+	// HELP
+	helpCMD := []byte("HELP\r\n")
+	response, err = shared.SendRecvAll(conn, helpCMD, timeout)
+	trace += string(response)
 
 	payload := ServiceFTP{
-		Banner: string(response),
+		Anonymous: false,
+		Banner:    strings.TrimSpace(b[0]),
 	}
 
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	// Try anonymous login
+	userCMD := []byte("USER anonymous\r\n")
+	response, err = shared.SendRecvAll(conn, userCMD, timeout)
+	trace += string(response)
+	pwdCMD := []byte("PASS anonymous@example.com\r\n")
+	response, err = shared.SendRecvAll(conn, pwdCMD, timeout)
+	trace += string(response)
+	// check response
+	if regexp.MustCompile(`^230`).Match(response) {
+		payload.Anonymous = true
+	}
+
+	// append trace
+	payload.Data = trace
+
+	// StartTLS
+	startTlsCMD := []byte("AUTH TLS\r\n")
+	response, err = shared.SendRecvAll(conn, startTlsCMD, timeout)
+	conn.Upgrade()
+
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

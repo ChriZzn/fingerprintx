@@ -16,11 +16,10 @@ package telnet
 
 import (
 	"encoding/hex"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -224,7 +223,7 @@ var TelnetOptionsMap = map[byte]bool{
 
 func isTelnet(telnet []byte) error {
 	msgLength := len(telnet)
-	matchError := &utils.InvalidResponseError{Service: TELNET}
+	matchError := &shared.InvalidResponseError{Service: TELNET}
 
 	if msgLength == 0 || msgLength == 1 {
 		// a 0 or 1 byte response is probably not a telnet server
@@ -264,8 +263,8 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	response, err := utils.Recv(conn, timeout)
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	response, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +278,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	payload := ServiceTelnet{
 		ServerData: hex.EncodeToString(response),
 	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

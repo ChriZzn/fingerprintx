@@ -1,5 +1,10 @@
 package stun
 
 type ServiceStun struct {
-	Info string `json:"info"`
+	Attributes []Attribute `json:"attributes,omitempty"`
+}
+
+type Attribute struct {
+	Key   string
+	Value string
 }

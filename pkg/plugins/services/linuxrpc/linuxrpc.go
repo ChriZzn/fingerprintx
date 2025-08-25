@@ -18,11 +18,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 /*
@@ -57,7 +57,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	rpcService := ServiceRPC{}
 
 	check, err := DetectRPCInfoService(conn, &rpcService, timeout)
@@ -65,7 +65,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, nil
 	}
 	if err == nil {
-		return plugins.CreateServiceFrom(target, p.Name(), rpcService, nil), nil
+		return plugins.CreateServiceFrom(target, p.Name(), rpcService, conn.TLS()), nil
 	}
 	return nil, err
 }
@@ -93,24 +93,24 @@ func DetectRPCInfoService(conn net.Conn, lookupResponse *ServiceRPC, timeout tim
 		0x00, 0x00, 0x00, 0x00,
 	}
 
-	response, err := utils.SendRecv(conn, callPacket, timeout)
+	response, err := shared.SendRecv(conn, callPacket, timeout)
 	if err != nil {
 		return false, err
 	}
 	if len(response) == 0 {
-		return true, &utils.ServerNotEnable{}
+		return true, &shared.ServerNotEnable{}
 	}
 
 	if !bytes.Contains(response, callResponseSignature) {
-		return true, &utils.InvalidResponseError{Service: RPC}
+		return true, &shared.InvalidResponseError{Service: RPC}
 	}
 
-	response, err = utils.SendRecv(conn, dumpPacket, timeout)
+	response, err = shared.SendRecv(conn, dumpPacket, timeout)
 	if err != nil {
 		return false, err
 	}
 	if len(response) == 0 {
-		return true, &utils.ServerNotEnable{}
+		return true, &shared.ServerNotEnable{}
 	}
 
 	return true, parseRPCInfo(response, lookupResponse)

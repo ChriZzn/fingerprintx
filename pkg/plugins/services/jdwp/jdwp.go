@@ -17,11 +17,11 @@ package jdwp
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -57,7 +57,7 @@ func DetectJDWPVersion(conn net.Conn, timeout time.Duration) (*ServiceJDWP, erro
 		return nil, err
 	}
 
-	response, err := utils.SendRecv(conn, versionBuf.Bytes(), timeout)
+	response, err := shared.SendRecv(conn, versionBuf.Bytes(), timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -129,13 +129,13 @@ func DetectJDWPVersion(conn net.Conn, timeout time.Duration) (*ServiceJDWP, erro
 	return &info, nil
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	requestBytes := []byte{
 		// ascii "JDWP-Handshake"
 		0x4a, 0x44, 0x57, 0x50, 0x2d, 0x48, 0x61, 0x6e, 0x64, 0x73, 0x68, 0x61, 0x6b, 0x65,
 	}
 
-	response, err := utils.SendRecv(conn, requestBytes, timeout)
+	response, err := shared.SendRecv(conn, requestBytes, timeout)
 	if err != nil {
 		return nil, err
 	}

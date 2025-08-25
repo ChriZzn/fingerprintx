@@ -16,12 +16,12 @@ package kafka
 
 import (
 	"encoding/binary"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -32,7 +32,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 
 	notReportError, err := checkAPIVersions(conn, timeout)
 	if err != nil {
@@ -151,12 +151,12 @@ func checkAPIVersions(conn net.Conn, timeout time.Duration) (bool, error) {
 		0x00,
 	}
 
-	response, err := utils.SendRecv(conn, apiVersionsRequest, timeout)
+	response, err := shared.SendRecv(conn, apiVersionsRequest, timeout)
 	if err != nil {
 		return false, err
 	}
 	if len(response) == 0 {
-		return true, &utils.ServerNotEnable{}
+		return true, &shared.ServerNotEnable{}
 	}
 
 	responseLength := binary.BigEndian.Uint32(response[0:4])

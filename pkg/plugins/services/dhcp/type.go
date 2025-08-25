@@ -1,5 +1,5 @@
 package dhcp
 
 type ServiceDHCP struct {
-	Option string `json:"option"`
+	Option string `json:"option,omitempty"`
 }

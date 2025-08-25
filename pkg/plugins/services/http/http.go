@@ -1,104 +1,186 @@
-// Copyright 2022 Praetorian Security, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package http
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+	"golang.org/x/net/html"
+	"io"
 	"net"
 	"net/http"
-	"syscall"
+	"strings"
 	"time"
-
-	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
-	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 )
 
-type HTTPPlugin struct {
-	analyzer *wappalyzer.Wappalyze
+const HTTP = "http"
+const USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+
+func init() {
+	wac, err := wappalyzer.New()
+	if err != nil {
+		panic("unable to initialize wappalyzer library")
+	}
+	plugins.RegisterPlugin(&Plugin{wappalyzer: wac})
 }
 
-func (p *HTTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s", conn.RemoteAddr().String()), nil)
-	if err != nil {
-		if errors.Is(err, syscall.ECONNREFUSED) {
-			return nil, nil
+type Plugin struct {
+	wappalyzer  *wappalyzer.Wappalyze
+	FaviconHash int32 `json:"favicon_hash,omitempty"`
+}
+
+func extractTitle(body []byte) (string, error) {
+	z := html.NewTokenizer(strings.NewReader(string(body)))
+	inTitle := false
+	for {
+		tt := z.Next()
+		switch tt {
+		case html.ErrorToken:
+			if z.Err() == io.EOF {
+				return "", io.EOF
+			}
+			return "", z.Err()
+		case html.StartTagToken:
+			t := z.Token()
+			if t.Data == "title" {
+				inTitle = true
+			}
+		case html.TextToken:
+			if inTitle {
+				title := strings.TrimSpace(string(z.Text()))
+				if title != "" {
+					return title, nil
+				}
+			}
+		case html.EndTagToken:
+			t := z.Token()
+			if t.Data == "title" {
+				inTitle = false
+			}
 		}
-		return nil, &utils.RequestError{Message: err.Error()}
+	}
+}
+
+func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze) ([]string, []string, []string, error) {
+	var technologies, cpes, categories []string
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	if target.Host != "" {
-		req.Host = target.Host
+	fingerprint := analyzer.FingerprintWithInfo(resp.Header, data)
+	for tech, appInfo := range fingerprint {
+		technologies = append(technologies, tech)
+		if cpe := appInfo.CPE; cpe != "" {
+			cpes = append(cpes, cpe)
+		}
+		if cat := appInfo.Categories; cat != nil {
+			categories = append(categories, cat...)
+		}
 	}
 
-	// http client with custom dialier to use the provided net.Conn
-	client := http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return conn, nil
-			},
+	return technologies, cpes, categories, nil
+}
+
+func HTTPClient(conn *plugins.FingerprintConn, timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			return conn, nil
 		},
+		DialTLSContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			return conn, nil
+		},
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	req.Header.Set("User-Agent", USERAGENT)
 
-	resp, err := client.Do(req)
+	// Set default User-Agent for all requests made by this client
+	originalTransport := client.Transport
+	client.Transport = &userAgentTransport{
+		transport: originalTransport,
+	}
+
+	return client
+}
+
+type userAgentTransport struct {
+	transport http.RoundTripper
+}
+
+// RoundTrip implements the RoundTripper interface
+func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", USERAGENT)
+	return t.transport.RoundTrip(req)
+}
+
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+
+	client := HTTPClient(conn, timeout)
+	service := &ServiceHTTP{}
+
+	// Build URI
+	scheme := "http"
+	if conn.TLS() != nil {
+		scheme = "https"
+	}
+	baseURL := scheme + "://" + target.Address.String()
+
+	// Request
+	resp, err := client.Get(baseURL + "/")
 	if err != nil {
-		return nil, &utils.RequestError{Message: err.Error()}
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	technologies, cpes, _ := p.FingerprintResponse(resp)
+	// Enrich Data
+	body, err := io.ReadAll(resp.Body)
 
-	payload := ServiceHTTP{
-		Status:          resp.Status,
-		StatusCode:      resp.StatusCode,
-		ResponseHeaders: resp.Header,
-	}
-	if len(technologies) > 0 {
-		payload.Technologies = technologies
-	}
-	if len(cpes) > 0 {
-		payload.CPEs = cpes
+	technologies, CPEs, cats, e := fingerprint(resp, p.wappalyzer)
+	if e == nil {
+		service.CPEs = CPEs
+		service.Technologies = technologies
+		service.Categories = cats
 	}
 
-	fmt.Println("server", resp.Header.Get("Server"))
+	// HTTP Data
+	service.Status = resp.StatusCode
+	service.Server = resp.Header.Get("Server")
+	if title, err := extractTitle(body); err == nil {
+		service.Title = title
+	}
 
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	// Favicon
+	service.Favicon = GetFavicon(client, baseURL, body)
+
+	// Headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			service.Headers = append(service.Headers, Header{
+				Key:   key,
+				Value: value,
+			})
+		}
+	}
+
+	return plugins.CreateServiceFrom(target, p.Name(), service, conn.TLS()), nil
 }
-func (p *HTTPPlugin) FingerprintResponse(resp *http.Response) ([]string, []string, error) {
-	return fingerprint(resp, p.analyzer)
-}
 
-func (p *HTTPPlugin) Name() string {
+func (p *Plugin) Name() string {
 	return HTTP
 }
 
-func (p *HTTPPlugin) Type() plugins.Protocol {
+func (p *Plugin) Type() plugins.Protocol {
 	return plugins.TCP
 }
 
-func (p *HTTPPlugin) Priority() int {
+func (p *Plugin) Priority() int {
 	return 0
 }
 
-func (p *HTTPPlugin) Ports() []uint16 {
-	return []uint16{80, 3000, 4567, 5000, 8000, 8001, 8080, 8081, 8888, 9001, 9080, 9090, 9100}
+func (p *Plugin) Ports() []uint16 {
+	return []uint16{80, 3000, 4567, 5000, 8000, 8001, 8080, 8081, 8888, 9001, 9080, 9090, 9100, 443, 9443, 8443}
 }

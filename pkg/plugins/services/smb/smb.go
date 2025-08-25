@@ -18,14 +18,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared/ntlm"
 	"net"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -131,7 +130,7 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 	packetHeaderLen := 64
 	minNegoResponseLen := 64
 
-	response, err := utils.SendRecv(conn, negotiateReqPacket, timeout)
+	response, err := shared.SendRecv(conn, negotiateReqPacket, timeout)
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
@@ -240,7 +239,7 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
 
-	response, err = utils.SendRecv(conn, sessionSetupReqPacket, timeout)
+	response, err = shared.SendRecv(conn, sessionSetupReqPacket, timeout)
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
@@ -249,104 +248,23 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 		return &info, err
 	}
 
-	challengeLen := 56
-	challengeStartOffset := bytes.Index(response, []byte{'N', 'T', 'L', 'M', 'S', 'S', 'P', 0})
-	if challengeStartOffset == -1 {
-		return &info, nil
-	}
-	if len(response) < challengeStartOffset+challengeLen {
-		return &info, nil
-	}
-	var sessionResponseData NTLMChallenge
-	response = response[challengeStartOffset:]
-	responseBuf = bytes.NewBuffer(response)
-	err = binary.Read(responseBuf, binary.LittleEndian, &sessionResponseData)
+	targetInfo, err := ntlm.ParseChallenge(response)
 	if err != nil {
-		return &info, err
-	}
-
-	// Check if valid NTLM challenge response message structure
-	if sessionResponseData.MessageType != 0x00000002 ||
-		sessionResponseData.Reserved != 0 ||
-		!reflect.DeepEqual(sessionResponseData.Version[4:], []byte{0, 0, 0, 0xF}) {
 		return &info, nil
 	}
 
-	// Parse: Version
-	type version struct {
-		MajorVersion byte
-		MinorVersion byte
-		BuildNumber  uint16
-	}
-	var versionData version
-	versionBuf := bytes.NewBuffer(sessionResponseData.Version[:4])
-	err = binary.Read(versionBuf, binary.LittleEndian, &versionData)
-	if err != nil {
-		return &info, err
-	}
-	info.OSVersion = fmt.Sprintf("%d.%d.%d", versionData.MajorVersion,
-		versionData.MinorVersion,
-		versionData.BuildNumber)
-
-	// Parse: TargetInfo
-	AvIDMap := map[uint16]string{
-		1: "netbiosComputerName",
-		2: "netbiosDomainName",
-		3: "dnsComputerName",
-		4: "dnsDomainName",
-		5: "forestName", // MsvAvDnsTreeName
-	}
-	type AVPair struct {
-		AvID  uint16
-		AvLen uint16
-		// Value (variable)
-	}
-	var avPairLen = 4
-	targetInfoLen := int(sessionResponseData.TargetInfoLen)
-	if targetInfoLen > 0 {
-		startIdx := int(sessionResponseData.TargetInfoBufferOffset)
-		if startIdx+targetInfoLen > len(response) {
-			return &info, nil
-		}
-		var avPair AVPair
-		avPairBuf := bytes.NewBuffer(response[startIdx : startIdx+avPairLen])
-		err = binary.Read(avPairBuf, binary.LittleEndian, &avPair)
-		if err != nil {
-			return &info, err
-		}
-		currIdx := startIdx
-		for avPair.AvID != 0 {
-			if field, exists := AvIDMap[avPair.AvID]; exists {
-				value := strings.ReplaceAll(string(response[currIdx+avPairLen:currIdx+avPairLen+int(avPair.AvLen)]), "\x00", "")
-				switch field {
-				case "netbiosComputerName":
-					info.NetBIOSComputerName = value
-				case "netbiosDomainName":
-					info.NetBIOSDomainName = value
-				case "dnsComputerName":
-					info.DNSComputerName = value
-				case "dnsDomainName":
-					info.DNSDomainName = value
-				case "forestName": // MsvAvDnsTreeName
-					info.ForestName = value
-				}
-			}
-			currIdx += avPairLen + int(avPair.AvLen)
-			if currIdx+avPairLen > startIdx+targetInfoLen {
-				return &info, nil
-			}
-			avPairBuf = bytes.NewBuffer(response[currIdx : currIdx+avPairLen])
-			err = binary.Read(avPairBuf, binary.LittleEndian, &avPair)
-			if err != nil {
-				return &info, nil
-			}
-		}
-	}
+	info.OSVersion = targetInfo.OSVersion
+	info.NetBIOSComputerName = targetInfo.NetBIOSComputerName
+	info.NetBIOSDomainName = targetInfo.NetBIOSDomainName
+	info.DNSComputerName = targetInfo.DNSComputerName
+	info.DNSDomainName = targetInfo.DNSDomainName
+	info.ForestName = targetInfo.ForestName
 
 	return &info, nil
+
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	info, err := DetectSMBv2(conn, timeout)
 	if err != nil {
 		return nil, err
@@ -354,9 +272,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	if info == nil {
 		return nil, nil
 	}
-
-	//TODO: type (info.OSVersion)
-	return plugins.CreateServiceFrom(target, p.Name(), info, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), info, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

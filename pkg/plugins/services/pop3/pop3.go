@@ -15,12 +15,12 @@
 package pop3
 
 import (
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{} // POP3
@@ -33,21 +33,21 @@ func init() {
 
 func DetectPOP3(conn net.Conn, timeout time.Duration, tls bool) (string, bool, error) {
 	// read initial response from server
-	initialResponse, err := utils.Recv(conn, timeout)
+	initialResponse, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return "", false, err
 	}
 	if len(initialResponse) == 0 {
-		return "", true, &utils.ServerNotEnable{}
+		return "", true, &shared.ServerNotEnable{}
 	}
 
 	// send a bogus command and read error response
-	errResponse, err := utils.SendRecv(conn, []byte("Not a command \r\n"), timeout)
+	errResponse, err := shared.SendRecv(conn, []byte("Not a command \r\n"), timeout)
 	if err != nil {
 		return "", false, err
 	}
 	if len(errResponse) == 0 {
-		return "", true, &utils.ServerNotEnable{}
+		return "", true, &shared.ServerNotEnable{}
 	}
 
 	isPOP3 := false
@@ -58,7 +58,7 @@ func DetectPOP3(conn net.Conn, timeout time.Duration, tls bool) (string, bool, e
 
 	if !isPOP3 {
 		// no ? :(
-		return "", true, &utils.InvalidResponseErrorInfo{
+		return "", true, &shared.InvalidResponseErrorInfo{
 			Service: POP3,
 			Info:    "did not get expected banner for POP3",
 		}
@@ -67,7 +67,7 @@ func DetectPOP3(conn net.Conn, timeout time.Duration, tls bool) (string, bool, e
 	return string(initialResponse[4:]), true, nil
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	result, check, err := DetectPOP3(conn, timeout, false)
 
 	if check && err != nil { // service is not running POP3
@@ -80,7 +80,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 	payload := ServicePOP3{
 		Banner: result,
 	}
-	return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

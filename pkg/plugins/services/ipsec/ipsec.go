@@ -18,11 +18,10 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const IPSEC = "ipsec"
@@ -33,11 +32,11 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	initiator := make([]byte, 8)
 	_, err := rand.Read(initiator)
 	if err != nil {
-		return nil, &utils.RandomizeError{Message: "initiator SPI"}
+		return nil, &shared.RandomizeError{Message: "initiator SPI"}
 	}
 	InitialConnectionPackage := append(initiator, []byte{ //nolint:gocritic
 		// 8 bit Initiator SPI
@@ -96,7 +95,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		0x00, 0x00, 0x70, 0x80,
 	}...)
 
-	response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
+	response, err := shared.SendRecv(conn, InitialConnectionPackage, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +111,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 			MessageID:    messageID,
 		}
 
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+		return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 	}
 	return nil, nil
 }

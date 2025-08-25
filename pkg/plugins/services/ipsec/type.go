@@ -1,6 +1,6 @@
 package ipsec
 
 type ServiceIPSEC struct {
-	ResponderISP string `json:"responderISP"`
-	MessageID    string `json:"messageID"`
+	ResponderISP string `json:"responderISP,omitempty"`
+	MessageID    string `json:"messageID,omitempty"`
 }

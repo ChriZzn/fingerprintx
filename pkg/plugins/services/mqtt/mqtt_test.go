@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mqtt3
+package mqtt
 
 import (
 	"testing"
@@ -22,7 +22,7 @@ import (
 	"github.com/ory/dockertest/v3"
 )
 
-func TestMqtt3(t *testing.T) {
+func TestMqtt5(t *testing.T) {
 	testcases := []test.Testcase{
 		{
 			Description: "mqtt",

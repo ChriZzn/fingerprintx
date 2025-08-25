@@ -17,11 +17,11 @@ package dns
 import (
 	"bytes"
 	"crypto/rand"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const DNS = "dns"
@@ -36,7 +36,7 @@ func CheckDNS(conn net.Conn, timeout time.Duration) (bool, error) {
 		transactionID := make([]byte, 2)
 		_, err := rand.Read(transactionID)
 		if err != nil {
-			return false, &utils.RandomizeError{Message: "Transaction ID"}
+			return false, &shared.RandomizeError{Message: "Transaction ID"}
 		}
 
 		InitialConnectionPackage := append(transactionID, []byte{ //nolint:gocritic
@@ -55,7 +55,7 @@ func CheckDNS(conn net.Conn, timeout time.Duration) (bool, error) {
 			InitialConnectionPackage = append([]byte{0x00, 0x1e}, InitialConnectionPackage...)
 		}
 
-		response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
+		response, err := shared.SendRecv(conn, InitialConnectionPackage, timeout)
 		if err != nil {
 			return false, err
 		}

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//TODO: adjust test ...
+
 package http
 
 import (
@@ -39,12 +41,12 @@ func TestHTTP(t *testing.T) {
 		},
 	}
 
-	p := HTTPPlugin{}
+	p := Plugin{}
 	wappalyzerClient, err := wappalyzer.New()
 	if err != nil {
 		panic("unable to initialize wappalyzer library")
 	}
-	p.analyzer = wappalyzerClient
+	p.wappalyzer = wappalyzerClient
 
 	for _, tc := range testcases {
 		tc := tc

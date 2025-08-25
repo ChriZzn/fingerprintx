@@ -17,12 +17,12 @@ package ldap
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math/rand"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
@@ -126,7 +126,7 @@ func generateBindRequestAndID() [2][]byte {
 func DetectLDAP(conn net.Conn, timeout time.Duration) (bool, error) {
 	requestAndID := generateBindRequestAndID()
 
-	response, err := utils.SendRecv(conn, requestAndID[0], timeout)
+	response, err := shared.SendRecv(conn, requestAndID[0], timeout)
 	if err != nil {
 		return false, err
 	}
@@ -159,14 +159,14 @@ func DetectLDAP(conn net.Conn, timeout time.Duration) (bool, error) {
 	return false, nil
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	isLDAP, err := DetectLDAP(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if isLDAP {
-		return plugins.CreateServiceFrom(target, p.Name(), ServiceLDAP{}, nil), nil
+		return plugins.CreateServiceFrom(target, p.Name(), ServiceLDAP{}, conn.TLS()), nil
 	}
 	return nil, nil
 }

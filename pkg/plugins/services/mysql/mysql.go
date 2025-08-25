@@ -16,11 +16,10 @@ package mysql
 
 import (
 	"fmt"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 /*
@@ -70,8 +69,8 @@ func init() {
 // two methods. Upon the connection of a client to a MySQL server it can return
 // one of two responses. Either the server returns an initial handshake packet
 // or an error message packet.
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	response, err := utils.Recv(conn, timeout)
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	response, err := shared.Recv(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -79,28 +78,67 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		return nil, nil
 	}
 
-	mysqlVersionStr, err := CheckInitialHandshakePacket(response)
-	if err == nil {
-		payload := ServiceMySQL{
-			PacketType:   "handshake",
-			ErrorMessage: "",
-			ErrorCode:    0,
-		}
-		//TODO: Version mysqlVersionStr
-		fmt.Printf(mysqlVersionStr)
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	}
+	payload := ServiceMySQL{}
 
-	errorStr, errorCode, err := CheckErrorMessagePacket(response)
-	if err == nil {
-		payload := ServiceMySQL{
-			PacketType:   "error",
-			ErrorMessage: errorStr,
-			ErrorCode:    errorCode,
+	if mysqlVersionStr, capabilities, err := CheckInitialHandshakePacket(response); err == nil {
+		payload.PacketType = "handshake"
+		payload.Version = mysqlVersionStr
+
+		// Send SSL request packet
+		sslRequest := createSSLRequest(capabilities)
+		if _, err := conn.Write(sslRequest); err == nil {
+			conn.Upgrade()
 		}
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
+
+	} else if errorStr, errorCode, err := CheckErrorMessagePacket(response); err == nil {
+		payload.PacketType = "error"
+		payload.ErrorMessage = errorStr
+		payload.ErrorCode = errorCode
+	} else {
+		return nil, nil
 	}
-	return nil, nil
+	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
+}
+
+// Create MySQL SSL request packet
+func createSSLRequest(serverCapabilities uint16) []byte {
+	clientFlags := uint32(serverCapabilities) | 0x800 // Add SSL flag
+
+	data := make([]byte, 32)
+	pos := 0
+
+	// Packet length (will be set later)
+	pos += 4
+
+	// Client capabilities flags
+	data[pos] = byte(clientFlags)
+	data[pos+1] = byte(clientFlags >> 8)
+	data[pos+2] = byte(clientFlags >> 16)
+	data[pos+3] = byte(clientFlags >> 24)
+	pos += 4
+
+	// Max packet size (16MB)
+	data[pos] = 0x00
+	data[pos+1] = 0x00
+	data[pos+2] = 0x00
+	data[pos+3] = 0x01
+	pos += 4
+
+	// Charset (utf8_general_ci)
+	data[pos] = 0x21
+	pos++
+
+	// Reserved (23 bytes of 0)
+	pos += 23
+
+	// Set packet length
+	pktLen := len(data) - 4
+	data[0] = byte(pktLen)
+	data[1] = byte(pktLen >> 8)
+	data[2] = byte(pktLen >> 16)
+	data[3] = 0x01 // Sequence number
+
+	return data
 }
 
 func (p *Plugin) Name() string {
@@ -124,7 +162,7 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 	// My brief research suggests that its not possible to get a compliant
 	// error message packet that is less than eight bytes
 	if len(response) < 8 {
-		return "", 0, &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet is too small for an error message packet",
 		}
@@ -144,7 +182,7 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 	actualResponseLength := len(response) - 4
 
 	if packetLength != actualResponseLength {
-		return "", 0, &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet length does not match length of the response from the server",
 		}
@@ -152,7 +190,7 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 
 	header := int(response[4])
 	if header != 0xff {
-		return "", 0, &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet has an invalid header for an error message packet",
 		}
@@ -160,7 +198,7 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 
 	errorCode := int(uint32(response[5]) | uint32(response[6])<<8)
 	if errorCode < 1000 || errorCode > 2000 {
-		return "", errorCode, &utils.InvalidResponseErrorInfo{
+		return "", errorCode, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet has an invalid error code",
 		}
@@ -168,7 +206,7 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 
 	errorStr, err := readEOFTerminatedASCIIString(response, 7)
 	if err != nil {
-		return "", errorCode, &utils.InvalidResponseErrorInfo{Service: MYSQL, Info: err.Error()}
+		return "", errorCode, &shared.InvalidResponseErrorInfo{Service: MYSQL, Info: err.Error()}
 	}
 
 	return errorStr, errorCode, nil
@@ -176,11 +214,11 @@ func CheckErrorMessagePacket(response []byte) (string, int, error) {
 
 // CheckInitialHandshakePacket checks if the response received from the server
 // matches the expected response for the MySQL service
-func CheckInitialHandshakePacket(response []byte) (string, error) {
+func CheckInitialHandshakePacket(response []byte) (string, uint16, error) {
 	// My brief research suggests that its not possible to get a compliant
 	// initial handshake packet that is less than roughly 35 bytes
 	if len(response) < 35 {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet length is too small for an initial handshake packet",
 		}
@@ -200,14 +238,14 @@ func CheckInitialHandshakePacket(response []byte) (string, error) {
 	version := int(response[4])
 
 	if packetLength < 25 || packetLength > 4096 {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet length doesn't make sense for the MySQL handshake packet",
 		}
 	}
 
 	if version != 10 {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "packet has an invalid version",
 		}
@@ -215,7 +253,7 @@ func CheckInitialHandshakePacket(response []byte) (string, error) {
 
 	mysqlVersionStr, position, err := readNullTerminatedASCIIString(response, 5)
 	if err != nil {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "unable to read null-terminated ASCII version string, err: " + err.Error(),
 		}
@@ -225,7 +263,7 @@ func CheckInitialHandshakePacket(response []byte) (string, error) {
 	// there is a filler byte that should always be zero at this position
 	fillerPos := position + 13
 	if position >= len(response) {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "buffer is too small to be a valid initial handshake packet",
 		}
@@ -233,7 +271,7 @@ func CheckInitialHandshakePacket(response []byte) (string, error) {
 
 	// According to the specification this should always be zero since it is a filler byte
 	if response[fillerPos] != 0x00 {
-		return "", &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info: fmt.Sprintf(
 				"expected filler byte at ths position to be zero got: %d",
@@ -241,8 +279,9 @@ func CheckInitialHandshakePacket(response []byte) (string, error) {
 			),
 		}
 	}
+	capabilities := uint16(response[fillerPos+1]) | uint16(response[fillerPos+2])<<8
 
-	return mysqlVersionStr, nil
+	return mysqlVersionStr, capabilities, nil
 }
 
 // readNullTerminatedASCIIString is responsible for reading a null terminated
@@ -260,12 +299,12 @@ func readNullTerminatedASCIIString(buffer []byte, startPosition int) (string, in
 			endPosition = position
 			break
 		} else {
-			return "", 0, &utils.InvalidResponseErrorInfo{Service: MYSQL, Info: "encountered invalid ASCII character"}
+			return "", 0, &shared.InvalidResponseErrorInfo{Service: MYSQL, Info: "encountered invalid ASCII character"}
 		}
 	}
 
 	if !success {
-		return "", 0, &utils.InvalidResponseErrorInfo{
+		return "", 0, &shared.InvalidResponseErrorInfo{
 			Service: MYSQL,
 			Info:    "hit the end of the buffer without encountering a null terminator",
 		}
@@ -283,7 +322,7 @@ func readEOFTerminatedASCIIString(buffer []byte, startPosition int) (string, err
 		if buffer[position] >= 0x20 && buffer[position] <= 0x7E {
 			characters = append(characters, buffer[position])
 		} else {
-			return "", &utils.InvalidResponseErrorInfo{Service: MYSQL, Info: "encountered invalid ASCII character"}
+			return "", &shared.InvalidResponseErrorInfo{Service: MYSQL, Info: "encountered invalid ASCII character"}
 		}
 	}
 

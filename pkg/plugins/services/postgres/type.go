@@ -1,5 +1,5 @@
 package postgres
 
 type ServicePostgreSQL struct {
-	AuthRequired bool `json:"authRequired"`
+	AuthRequired bool `json:"authRequired,omitempty"`
 }

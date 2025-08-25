@@ -16,12 +16,11 @@ package openvpn
 
 import (
 	"crypto/rand"
-	"net"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"reflect"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 const OPENVPN = "openvpn"
@@ -32,7 +31,7 @@ func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	/**
 	 * https://build.openvpn.net/doxygen/ssl__pkt_8h_source.html
 	 * https://openvpn.net/community-resources/openvpn-protocol/
@@ -57,10 +56,10 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 		InitialConnectionPackage[1 : 1+SessionIDLength],
 	) // generate random session ID
 	if err != nil {
-		return nil, &utils.RandomizeError{Message: "session ID"}
+		return nil, &shared.RandomizeError{Message: "session ID"}
 	}
 
-	response, err := utils.SendRecv(conn, InitialConnectionPackage, timeout)
+	response, err := shared.SendRecv(conn, InitialConnectionPackage, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +74,7 @@ func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target
 				response[i:i+SessionIDLength],
 				InitialConnectionPackage[1:1+SessionIDLength],
 			) {
-				//TODO: Missing SSL?
-				return plugins.CreateServiceFrom(target, p.Name(), ServiceOpenVPN{}, nil), nil
+				return plugins.CreateServiceFrom(target, p.Name(), ServiceOpenVPN{}, conn.TLS()), nil
 			}
 		}
 	}

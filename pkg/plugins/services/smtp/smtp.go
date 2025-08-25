@@ -16,22 +16,16 @@ package smtp
 
 import (
 	"bytes"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	utils "github.com/chrizzn/fingerprintx/pkg/plugins/pluginutils"
 )
 
 type Plugin struct{}
 
 const SMTP = "smtp"
-
-type Data struct {
-	Banner      string
-	AuthMethods []string
-}
 
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
@@ -77,77 +71,68 @@ func handleSMTPHelo(response []byte) (bool, bool) {
 	return isSMTP, isSMTPErr
 }
 
-func DetectSMTP(conn net.Conn, timeout time.Duration) (Data, bool, error) {
-	protocol := SMTP
-
-	response, err := utils.Recv(conn, timeout)
+func DetectSMTP(conn net.Conn, timeout time.Duration) (ServiceSMTP, bool, error) {
+	response, err := shared.RecvAll(conn, timeout)
 	if err != nil {
-		return Data{}, false, err
+		return ServiceSMTP{}, false, err
 	}
 	if len(response) == 0 {
-		return Data{}, true, &utils.ServerNotEnable{}
+		return ServiceSMTP{}, true, &shared.ServerNotEnable{}
 	}
 
 	isSMTP, smtpError := handleSMTPConn(response)
 	if !isSMTP && !smtpError {
-		return Data{}, true, &utils.InvalidResponseError{Service: protocol}
+		return ServiceSMTP{}, true, &shared.InvalidResponseError{Service: SMTP}
 	}
 
 	banner := make([]byte, len(response))
 	copy(banner, response)
 
 	// Send the EHLO message
-	smtpEhloCommand := []byte("EHLO example.com\r\n")
-	response, err = utils.SendRecv(conn, smtpEhloCommand, timeout)
+	response, err = shared.SendRecv(conn, []byte("EHLO example.com\r\n"), timeout)
 	if err != nil {
-		return Data{}, false, err
+		return ServiceSMTP{}, false, err
 	}
 	if len(response) == 0 {
-		return Data{}, true, &utils.ServerNotEnable{}
+		return ServiceSMTP{}, true, &shared.ServerNotEnable{}
 	}
 
 	isSMTP, smtpError = handleSMTPHelo(response)
 	if !isSMTP {
-		return Data{}, true, &utils.InvalidResponseErrorInfo{
-			Service: protocol,
+		return ServiceSMTP{}, true, &shared.InvalidResponseErrorInfo{
+			Service: SMTP,
 			Info:    "invalid SMTP Helo response",
 		}
 	}
 
-	// a valid smtperror means it is smtp
-	if smtpError {
-		data := Data{
-			Banner: string(banner),
-		}
-
-		return data, true, nil
+	data := ServiceSMTP{
+		Banner: string(banner),
 	}
 
-	if isSMTP {
-		data := Data{
-			Banner:      string(banner),
-			AuthMethods: strings.Split(strings.ReplaceAll(string(response), "-", " "), " "),
-		}
-
-		return data, true, nil
-	}
-
-	return Data{}, true, &utils.InvalidResponseError{Service: protocol}
+	// Both smtpError and isSMTP indicate valid SMTP server
+	return data, true, nil
 }
 
-func (p *Plugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+
 	data, check, err := DetectSMTP(conn, timeout)
-	if err == nil && check {
-		payload := ServiceSMTP{
-			Banner:      data.Banner,
-			AuthMethods: data.AuthMethods,
+	if err != nil {
+		if check {
+			return nil, nil
 		}
-		//TODO: ADD STARTTLS
-		return plugins.CreateServiceFrom(target, p.Name(), payload, nil), nil
-	} else if err != nil && check {
+		return nil, err
+	}
+
+	if !check {
 		return nil, nil
 	}
-	return nil, err
+
+	// StartTLS
+	startTlsCMD := []byte("STARTTLS\r\n")
+	_, err = shared.SendRecvAll(conn, startTlsCMD, timeout)
+	conn.Upgrade()
+
+	return plugins.CreateServiceFrom(target, p.Name(), data, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {
