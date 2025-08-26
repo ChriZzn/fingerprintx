@@ -152,10 +152,6 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 		return nil, err
 	}
 
-	if info == nil {
-		return plugins.CreateServiceFrom(target, p.Name(), nil, nil), nil
-	}
-	//TODO: TYPE (info.VMVersion)
 	return plugins.CreateServiceFrom(target, p.Name(), info, nil), nil
 }
 

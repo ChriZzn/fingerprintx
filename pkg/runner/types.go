@@ -20,6 +20,7 @@ type cliConfig struct {
 	outputCSV       bool
 	overwriteOutput bool
 	fastMode        bool
+	fallBack        bool
 	timeout         int
 	verbose         bool
 	showErrors      bool

@@ -21,7 +21,13 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
-		return runPlugin(conn, target, c, plugin)
+
+		result, err := runPlugin(conn, target, c, plugin)
+		if result == nil && c.FallBack == true {
+			return fallback(target, conn)
+		}
+		return result, err
+
 	}
 
 	// Bruteforce until the service is found
@@ -38,9 +44,16 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 		}
 		if result != nil && err == nil {
 			// identified plugin match
+
 			return result, nil
 		}
 	}
+
+	if c.FallBack == true {
+		conn, _ := plugins.Connect(target)
+		return fallback(target, conn)
+	}
+
 	return nil, nil
 }
 
@@ -64,7 +77,6 @@ func runPlugin(
 	}
 
 	result, err := plugin.Run(conn, config.DefaultTimeout, target)
-	//TODO: FALL BACK FOR NONE/uknown/just SSL Plugin ?? (185.8.24.152:23)
 
 	// Log probe completion.
 	if config.Verbose {
@@ -76,4 +88,9 @@ func runPlugin(
 		)
 	}
 	return result, err
+}
+
+// fallback initializes a default Service object for the provided Target and returns it.
+func fallback(target plugins.Target, conn *plugins.FingerprintConn) (*plugins.Service, error) {
+	return plugins.CreateServiceFrom(target, "unknown", nil, conn.TLS()), nil
 }

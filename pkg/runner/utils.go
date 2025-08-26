@@ -50,6 +50,7 @@ func createScanConfig(config cliConfig) scan.Config {
 	return scan.Config{
 		DefaultTimeout: time.Duration(config.timeout) * time.Millisecond,
 		FastMode:       config.fastMode,
+		FallBack:       config.fallBack,
 		Verbose:        config.verbose,
 	}
 }

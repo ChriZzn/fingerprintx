@@ -21,6 +21,8 @@ import (
 type Config struct {
 	FastMode bool
 
+	FallBack bool
+
 	// The timeout specifies how long certain tasks should wait during the scanning process.
 	// This may include the timeouts set on the handshake process and the time to wait for a response to return.
 	DefaultTimeout time.Duration

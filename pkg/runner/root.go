@@ -92,6 +92,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&config.outputCSV, "csv", "", false, "output format in csv")
 
 	rootCmd.PersistentFlags().BoolVarP(&config.fastMode, "fast", "f", false, "fast mode")
+	rootCmd.PersistentFlags().BoolVarP(&config.fallBack, "fallback", "b", false, "fall back mode")
 
 	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
 	rootCmd.PersistentFlags().
