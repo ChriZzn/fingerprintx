@@ -32,6 +32,7 @@ import (
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/linuxrpc"
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/modbus"
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/mqtt"
+	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/msrpc"
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/mssql"
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/mysql"
 	_ "github.com/chrizzn/fingerprintx/pkg/plugins/services/netbios"
