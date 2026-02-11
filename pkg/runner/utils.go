@@ -15,6 +15,7 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -48,6 +49,7 @@ func checkConfig(config cliConfig) error {
 
 func createScanConfig(config cliConfig) scan.Config {
 	return scan.Config{
+		Ctx:            context.Background(),
 		DefaultTimeout: time.Duration(config.timeout) * time.Millisecond,
 		FastMode:       config.fastMode,
 		FallBack:       config.fallBack,

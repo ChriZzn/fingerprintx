@@ -15,10 +15,15 @@
 package scan
 
 import (
+	"context"
 	"time"
 )
 
 type Config struct {
+	// Ctx controls cancellation and overall timeout for the scan.
+	// If nil, defaults to context.Background().
+	Ctx context.Context
+
 	FastMode bool
 
 	FallBack bool

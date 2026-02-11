@@ -15,6 +15,7 @@
 package scan
 
 import (
+	"context"
 	"log"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
@@ -22,10 +23,21 @@ import (
 
 // Scan fingerprints service(s) running given a list of targets. (Entrypoint)
 func Scan(targets []plugins.Target, config Config) ([]plugins.Service, error) {
+	if config.Ctx == nil {
+		config.Ctx = context.Background()
+	}
+
 	var results []plugins.Service
 
 	// Run a per Target Scan
 	for _, target := range targets {
+		// Check for cancellation before each target
+		select {
+		case <-config.Ctx.Done():
+			return results, config.Ctx.Err()
+		default:
+		}
+
 		result, err := config.RunTargetScan(target)
 		if err == nil && result != nil {
 			results = append(results, *result)

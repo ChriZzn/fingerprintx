@@ -82,7 +82,7 @@ func RunTest(t *testing.T, tc Testcase, p plugins.Plugin) error {
 			return fmt.Errorf("timeout waiting for container")
 		default:
 			time.Sleep(1 * time.Second)
-			conn, dialErr := plugins.Connect(testTarget)
+			conn, dialErr := plugins.Connect(ctx, testTarget, 2*time.Second)
 			if dialErr != nil {
 				return dialErr
 			}
@@ -95,7 +95,7 @@ func RunTest(t *testing.T, tc Testcase, p plugins.Plugin) error {
 	require.NoError(t, err, "failed to connect to test container")
 
 	fmt.Printf("opening connection: %s\n", testTarget.String())
-	conn, err := plugins.Connect(testTarget)
+	conn, err := plugins.Connect(context.Background(), testTarget, 3*time.Second)
 	require.NoError(t, err, "failed to open connection to container")
 
 	result, err := p.Run(conn, time.Second*3, testTarget)

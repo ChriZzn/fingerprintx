@@ -17,7 +17,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 			return nil, fmt.Errorf("unable to find plugin for target %v", target)
 		}
 		// connect
-		conn, err := plugins.Connect(target)
+		conn, err := plugins.Connect(c.Ctx, target, c.DefaultTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
@@ -32,8 +32,15 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 
 	// Bruteforce until the service is found
 	for _, plugin := range pluginMatrix.GetPluginsByTransport(target.Transport) {
+		// Check for cancellation before each plugin attempt
+		select {
+		case <-c.Ctx.Done():
+			return nil, c.Ctx.Err()
+		default:
+		}
+
 		//connect
-		conn, err := plugins.Connect(target)
+		conn, err := plugins.Connect(c.Ctx, target, c.DefaultTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to target, err = %w", err)
 		}
@@ -50,7 +57,7 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 	}
 
 	if c.FallBack == true {
-		conn, _ := plugins.Connect(target)
+		conn, _ := plugins.Connect(c.Ctx, target, c.DefaultTimeout)
 		return fallback(target, conn)
 	}
 
@@ -65,7 +72,23 @@ func runPlugin(
 	target plugins.Target,
 	config *Config,
 	plugin plugins.Plugin,
-) (*plugins.Service, error) {
+) (result *plugins.Service, err error) {
+
+	// Recover from panics in plugins to prevent crashing the entire process.
+	defer func() {
+		if r := recover(); r != nil {
+			result = nil
+			err = fmt.Errorf("plugin %v panicked: %v", plugins.CreatePluginID(plugin), r)
+			if config.Verbose {
+				log.Printf("%v %v-> plugin %v panicked: %v\n",
+					target.Address.String(),
+					target.Host,
+					plugins.CreatePluginID(plugin),
+					r,
+				)
+			}
+		}
+	}()
 
 	// Log probe start.
 	if config.Verbose {
@@ -76,7 +99,7 @@ func runPlugin(
 		)
 	}
 
-	result, err := plugin.Run(conn, config.DefaultTimeout, target)
+	result, err = plugin.Run(conn, config.DefaultTimeout, target)
 
 	// Log probe completion.
 	if config.Verbose {

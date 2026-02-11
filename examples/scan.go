@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/netip"
@@ -12,7 +13,12 @@ import (
 
 func main() {
 	// setup the scan config (mirrors command line options)
+	// Use a context to control overall scan timeout and cancellation
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	fxConfig := scan.Config{
+		Ctx:            ctx,
 		DefaultTimeout: time.Duration(2) * time.Second,
 		FastMode:       false,
 		Verbose:        false,

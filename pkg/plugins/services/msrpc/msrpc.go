@@ -55,6 +55,11 @@ func createBindRequest() []byte {
 
 func isValidMSRPCResponse(response []byte) bool {
 
+	// Need at least 5 bytes to validate version, packet type, and data representation
+	if len(response) < 5 {
+		return false
+	}
+
 	// Check version (5.0)
 	if response[0] != RPC_VERSION || response[1] != RPC_MINOR_VERSION {
 		return false

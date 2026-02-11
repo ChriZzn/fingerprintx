@@ -1,14 +1,12 @@
 package plugins
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"time"
 )
 
-var dialer = &net.Dialer{
-	Timeout: 2 * time.Second,
-}
 var tlsConfig = tls.Config{} //nolint:gosec
 
 func init() {
@@ -24,24 +22,25 @@ func init() {
 	tlsConfig.MinVersion = tls.VersionSSL30
 }
 
-func Connect(target Target) (*FingerprintConn, error) {
-	conn, err := connectTLS(target)
+func Connect(ctx context.Context, target Target, dialTimeout time.Duration) (*FingerprintConn, error) {
+	conn, err := connectTLS(ctx, target, dialTimeout)
 	if err == nil {
 		return &FingerprintConn{Conn: conn}, nil
 	}
 
-	conn, err = connectRAW(target)
+	conn, err = connectRAW(ctx, target, dialTimeout)
 	if err == nil {
 		return &FingerprintConn{Conn: conn}, nil
 	}
 	return nil, err
 }
 
-func connectRAW(target Target) (net.Conn, error) {
-	return dialer.Dial(target.Transport.String(), target.Address.String())
+func connectRAW(ctx context.Context, target Target, dialTimeout time.Duration) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: dialTimeout}
+	return dialer.DialContext(ctx, target.Transport.String(), target.Address.String())
 }
 
-func connectTLS(target Target) (net.Conn, error) {
+func connectTLS(ctx context.Context, target Target, dialTimeout time.Duration) (net.Conn, error) {
 	config := &tlsConfig
 
 	if target.Host != "" {
@@ -49,5 +48,9 @@ func connectTLS(target Target) (net.Conn, error) {
 		c.ServerName = target.Host
 		config = c
 	}
-	return tls.DialWithDialer(dialer, target.Transport.String(), target.Address.String(), config)
+	d := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: dialTimeout},
+		Config:    config,
+	}
+	return d.DialContext(ctx, target.Transport.String(), target.Address.String())
 }
