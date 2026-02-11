@@ -41,34 +41,75 @@ https://user-images.githubusercontent.com/69640071/193334167-8405dd50-f9bf-4386-
 
 ## Supported Protocols:
 
+**51 service detection plugins** supporting TCP and UDP protocols:
+
 <div align="center">
 
-|SERVICE   |TRANSPORT|SERVICE|TRANSPORT|
-| ---------| --------| ---------| --------|
-|HTTP      |TCP      |REDIS     |TCP      |
-|SSH       |TCP      |MQTT3     |TCP      |
-|MODBUS    |TCP      |VNC       |TCP      |
-|TELNET    |TCP      |MQTT5     |TCP      |
-|FTP       |TCP      |RSYNC     |TCP      |
-|SMB       |TCP      |RPC       |TCP      |
-|DNS       |TCP      |OracleDB  |TCP      |
-|SMTP      |TCP      |RTSP      |TCP      |
-|PostgreSQL|TCP      |MQTT5     |TCP (TLS)|
-|RDP       |TCP      |HTTPS     |TCP (TLS)|
-|POP3      |TCP      |SMTPS     |TCP (TLS)|
-|KAFKA     |TCP      |MQTT3     |TCP (TLS)|
-|MySQL     |TCP      |RDP       |TCP (TLS)|
-|MSSQL     |TCP      |POP3S     |TCP (TLS)|
-|LDAP      |TCP      |LDAPS     |TCP (TLS)|
-|IMAP      |TCP      |IMAPS     |TCP (TLS)|
-|SNMP      |UDP      |Kafka     |TCP (TLS)|
-|OPENVPN   |UDP      |NETBIOS-NS|UDP      |
-|IPSEC     |UDP      |DHCP      |UDP      |
-|STUN      |UDP      |NTP       |UDP      |
-|DNS       |UDP      |
-
+|SERVICE       |TRANSPORT|
+|--------------|---------|
+|Cassandra     |TCP      |
+|ChromaDB      |TCP      |
+|CouchDB       |TCP      |
+|DB2           |TCP      |
+|DHCP          |UDP      |
+|Diameter      |TCP      |
+|DNS           |TCP/UDP  |
+|Echo          |TCP      |
+|Elasticsearch |TCP      |
+|Firebird      |TCP      |
+|FTP           |TCP      |
+|HTTP/HTTPS    |TCP      |
+|IMAP          |TCP      |
+|InfluxDB      |TCP      |
+|IPMI          |TCP      |
+|IPSEC         |UDP      |
+|Java RMI      |TCP      |
+|JDWP          |TCP      |
+|Kafka         |TCP      |
+|LDAP          |TCP      |
+|Linux RPC     |TCP      |
+|Memcached     |TCP      |
+|Milvus        |TCP      |
+|Modbus        |TCP      |
+|MongoDB       |TCP      |
+|MQTT          |TCP      |
+|MSSQL         |TCP      |
+|MySQL         |TCP      |
+|Neo4j         |TCP      |
+|NetBIOS-NS    |UDP      |
+|NTP           |UDP      |
+|OpenVPN       |UDP      |
+|OracleDB      |TCP      |
+|Pinecone      |TCP      |
+|POP3          |TCP      |
+|PostgreSQL    |TCP      |
+|RDP           |TCP      |
+|Redis         |TCP      |
+|Rsync         |TCP      |
+|RTSP          |TCP      |
+|SMB           |TCP      |
+|SMPP          |TCP      |
+|SMTP          |TCP      |
+|SNMP          |UDP      |
+|SNPP          |TCP      |
+|SSH           |TCP      |
+|STUN          |UDP      |
+|Sybase        |TCP      |
+|Telnet        |TCP      |
+|VNC           |TCP      |
 
 </div>
+
+### Notable Features:
+- **Vector Databases**: ChromaDB, Milvus, Pinecone
+- **Relational Databases**: PostgreSQL, MySQL, MSSQL, OracleDB, DB2, Sybase, Firebird
+- **NoSQL Databases**: MongoDB, CouchDB, Cassandra, Redis, Elasticsearch, InfluxDB, Neo4j
+- **Developer Tools**: JDWP (Java Debug Wire Protocol), Java RMI
+- **Industrial Protocols**: Modbus, IPMI
+- **Messaging**: Kafka, MQTT, SMTP
+- **Remote Access**: SSH, RDP, Telnet, VNC
+- **File Transfer**: FTP, SMB, Rsync
+- **Telecom/AAA**: Diameter (3GPP networks, LTE/5G), SMPP (SMS gateways)
 
 # Installation
 From Github
@@ -190,9 +231,10 @@ $ cat input.txt | fingerprintx --json
 # Acknowledgements
 `fingerprintx` is the work of a lot of people, including our great intern class of 2022. Here is a list of contributors so far:
 
-* [praetorian-sohamroy](https://github.com/praetorian-sohamroy)
-* [jue-huang](https://github.com/jue-huang)
-* [henryjung64](https://github.com/henryjung64)
-* [qwetboy10](https://github.com/qwetboy10)
-* [jwhenry28](https://github.com/jwhenry28)
-* [noahtutt](https://github.com/noahtutt)
+* [Soham Roy][praetorian-sohamroy](https://github.com/praetorian-sohamroy)
+* [Jue Huang] (https://github.com/jue-huang)
+* [Henry Jung] (https://github.com/henryjung64)
+* [Tristan Wiesepape][qwetboy10] (https://github.com/qwetboy10)
+* [Joseph Henry][jwhenry28] (https://github.com/jwhenry28)
+* [Noah Tutt][noahtutt] (https://github.com/noahtutt)
+* [Nathan Sportsman][nsportsman] (https://github.com/nsportsman)
