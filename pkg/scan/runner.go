@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"fmt"
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
 	"log"
@@ -9,6 +10,10 @@ import (
 func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) {
 
 	pluginMatrix := NewPluginMatrix()
+
+	if c.Ctx == nil {
+		c.Ctx = context.Background()
+	}
 
 	if c.FastMode {
 		// search and executes the Plugin

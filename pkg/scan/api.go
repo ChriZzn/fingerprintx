@@ -23,6 +23,7 @@ import (
 
 // Scan fingerprints service(s) running given a list of targets. (Entrypoint)
 func Scan(targets []plugins.Target, config Config) ([]plugins.Service, error) {
+
 	if config.Ctx == nil {
 		config.Ctx = context.Background()
 	}

@@ -17,6 +17,7 @@ package plugins
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"github.com/ChriZzn/sslx/sslx"
 	"log"
 	"net"
@@ -100,7 +101,11 @@ type Target struct {
 }
 
 func (t Target) String() string {
-	return t.Address.String() + "/" + t.Transport.String()
+	addr := t.Address.String()
+	if t.Host != "" {
+		addr = fmt.Sprintf("%s:%d", t.Host, t.Address.Port())
+	}
+	return addr
 }
 
 // Connection Struct

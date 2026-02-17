@@ -37,7 +37,8 @@ func Connect(ctx context.Context, target Target, dialTimeout time.Duration) (*Fi
 
 func connectRAW(ctx context.Context, target Target, dialTimeout time.Duration) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: dialTimeout}
-	return dialer.DialContext(ctx, target.Transport.String(), target.Address.String())
+
+	return dialer.DialContext(ctx, target.Transport.String(), target.String())
 }
 
 func connectTLS(ctx context.Context, target Target, dialTimeout time.Duration) (net.Conn, error) {
@@ -52,5 +53,5 @@ func connectTLS(ctx context.Context, target Target, dialTimeout time.Duration) (
 		NetDialer: &net.Dialer{Timeout: dialTimeout},
 		Config:    config,
 	}
-	return d.DialContext(ctx, target.Transport.String(), target.Address.String())
+	return d.DialContext(ctx, target.Transport.String(), target.String())
 }

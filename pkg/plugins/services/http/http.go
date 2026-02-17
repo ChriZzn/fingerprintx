@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"golang.org/x/net/html"
@@ -127,10 +128,11 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 	if conn.TLS() != nil {
 		scheme = "https"
 	}
-	baseURL := scheme + "://" + target.Address.String()
+
+	baseURL := fmt.Sprintf("%s://%s/", scheme, target.String())
 
 	// Request
-	resp, err := client.Get(baseURL + "/")
+	resp, err := client.Get(baseURL)
 	if err != nil {
 		return nil, err
 	}
