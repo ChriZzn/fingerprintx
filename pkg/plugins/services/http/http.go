@@ -168,7 +168,7 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 		}
 	}
 
-	return plugins.CreateServiceFrom(target, p.Name(), service, conn.TLS()), nil
+	return plugins.CreateServiceFrom(target, scheme, service, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {
