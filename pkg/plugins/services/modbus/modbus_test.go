@@ -15,6 +15,7 @@
 package modbus
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
@@ -29,7 +30,19 @@ func TestModbus(t *testing.T) {
 			Port:        5020,
 			Protocol:    plugins.TCP,
 			Expected: func(res *plugins.Service) bool {
-				return res != nil
+				if res == nil {
+					return false
+				}
+				// Validate that metadata deserializes into ServiceModbus
+				raw, err := json.Marshal(res.Metadata)
+				if err != nil {
+					return false
+				}
+				var meta ServiceModbus
+				if err := json.Unmarshal(raw, &meta); err != nil {
+					return false
+				}
+				return true
 			},
 			RunConfig: dockertest.RunOptions{
 				Repository: "oitc/modbus-server",

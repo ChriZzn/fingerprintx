@@ -112,9 +112,13 @@ func (t Target) String() string {
 
 type FingerprintConn struct {
 	net.Conn
+	tlsState *tls.ConnectionState
 }
 
 func (c *FingerprintConn) TLS() *tls.ConnectionState {
+	if c.tlsState != nil {
+		return c.tlsState
+	}
 	if tlsConn, ok := c.Conn.(*tls.Conn); ok {
 		state := tlsConn.ConnectionState()
 		return &state
@@ -123,12 +127,13 @@ func (c *FingerprintConn) TLS() *tls.ConnectionState {
 }
 
 func (c *FingerprintConn) Upgrade() {
-
 	conn := c.Conn.(*net.TCPConn)
 
 	t := tls.Client(conn, &tlsConfig)
 	err := t.Handshake()
 	if err == nil {
 		c.Conn = t
+		state := t.ConnectionState()
+		c.tlsState = &state
 	}
 }

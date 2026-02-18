@@ -15,6 +15,7 @@
 package ldap
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
@@ -29,7 +30,19 @@ func TestLDAP(t *testing.T) {
 			Port:        1389,
 			Protocol:    plugins.TCP,
 			Expected: func(res *plugins.Service) bool {
-				return res != nil
+				if res == nil {
+					return false
+				}
+				// Verify metadata is populated
+				if res.Metadata == nil {
+					return false
+				}
+				var meta ServiceLDAP
+				if err := json.Unmarshal(res.Metadata, &meta); err != nil {
+					return false
+				}
+				// bitnami/openldap should report at least supportedLDAPVersion
+				return len(meta.SupportedLDAPVersions) > 0
 			},
 			RunConfig: dockertest.RunOptions{
 				Repository: "bitnami/openldap",

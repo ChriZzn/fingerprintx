@@ -16,17 +16,18 @@ package ssh
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"io"
 	"math/big"
 	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"github.com/chrizzn/fingerprintx/third_party/cryptolib/ssh"
 )
 
@@ -188,11 +189,142 @@ func checkAlgo(data []byte) (map[string]string, error) {
 
 	return info, nil
 }
+
+// parseBanner parses an SSH identification string per RFC 4253 §4.2.
+// Format: SSH-protoversion-softwareversion SP comments CR LF
+// Returns empty strings on malformed input.
+func parseBanner(banner string) (proto, software, comments string) {
+	banner = strings.TrimRight(banner, "\r\n")
+	if !strings.HasPrefix(banner, "SSH-") {
+		return "", "", ""
+	}
+	rest := banner[4:] // strip "SSH-"
+
+	dashIdx := strings.Index(rest, "-")
+	if dashIdx < 0 {
+		return "", "", ""
+	}
+	proto = rest[:dashIdx]
+	rest = rest[dashIdx+1:]
+
+	spaceIdx := strings.Index(rest, " ")
+	if spaceIdx < 0 {
+		software = rest
+		return proto, software, ""
+	}
+	software = rest[:spaceIdx]
+	comments = rest[spaceIdx+1:]
+	return proto, software, comments
+}
+
+// algoMapToStruct converts the checkAlgo() map output to a structured SSHAlgorithms.
+func algoMapToStruct(algo map[string]string) *SSHAlgorithms {
+	if algo == nil {
+		return nil
+	}
+	splitNonEmpty := func(s string) []string {
+		if s == "" {
+			return nil
+		}
+		return strings.Split(s, ",")
+	}
+	return &SSHAlgorithms{
+		KexAlgorithms:             splitNonEmpty(algo["KexAlgos"]),
+		ServerHostKeyAlgorithms:   splitNonEmpty(algo["ServerHostKeyAlgos"]),
+		CiphersClientToServer:     splitNonEmpty(algo["CiphersClientServer"]),
+		CiphersServerToClient:     splitNonEmpty(algo["CiphersServerClient"]),
+		MACsClientToServer:        splitNonEmpty(algo["MACsClientServer"]),
+		MACsServerToClient:        splitNonEmpty(algo["MACsServerClient"]),
+		CompressionClientToServer: splitNonEmpty(algo["CompressionClientServer"]),
+		CompressionServerToClient: splitNonEmpty(algo["CompressionServerClient"]),
+	}
+}
+
+// probeAuthMethods probes an SSH server for supported authentication methods.
+// It generates a throwaway ed25519 key and attempts publickey + password +
+// keyboard-interactive auth, then parses the attempted methods from the error.
+// Returns nil on any failure (best-effort).
+func probeAuthMethods(address string, timeout time.Duration) ([]string, error) {
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	signer, err := ssh.NewSignerFromKey(privKey)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &ssh.ClientConfig{
+		User: "admin",
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+			ssh.Password("admin"),
+			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+				answers := make([]string, len(questions))
+				for i := range answers {
+					answers[i] = "password"
+				}
+				return answers, nil
+			}),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         timeout,
+	}
+	conf.KeyExchanges = append(conf.KeyExchanges,
+		"diffie-hellman-group-exchange-sha256",
+		"diffie-hellman-group-exchange-sha1",
+		"diffie-hellman-group1-sha1",
+		"diffie-hellman-group14-sha1",
+		"diffie-hellman-group14-sha256",
+		"ecdh-sha2-nistp256",
+		"ecdh-sha2-nistp384",
+		"ecdh-sha2-nistp521",
+		"curve25519-sha256@libssh.org",
+		"curve25519-sha256",
+	)
+	conf.Ciphers = append(conf.Ciphers,
+		"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-gcm@openssh.com",
+		"chacha20-poly1305@openssh.com",
+		"arcfour256", "arcfour128", "arcfour",
+		"aes128-cbc",
+		"3des-cbc",
+	)
+
+	client, err := ssh.Dial("tcp", address, conf)
+	if err != nil {
+		methods := parseAttemptedMethods(err.Error())
+		return methods, nil
+	}
+	client.Close()
+	return nil, nil
+}
+
+// parseAttemptedMethods extracts auth method names from an SSH error message.
+// Example: "ssh: handshake failed: ssh: unable to authenticate, attempted methods [publickey password keyboard-interactive], no supported methods remain"
+func parseAttemptedMethods(errMsg string) []string {
+	const marker = "attempted methods ["
+	idx := strings.Index(errMsg, marker)
+	if idx < 0 {
+		return nil
+	}
+	rest := errMsg[idx+len(marker):]
+	endIdx := strings.Index(rest, "]")
+	if endIdx < 0 {
+		return nil
+	}
+	methods := rest[:endIdx]
+	if methods == "" {
+		return nil
+	}
+	return strings.Fields(methods)
+}
+
 func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
 	var (
 		banner             string
-		passwordAuth       bool
 		algo               map[string]string
+		algorithms         *SSHAlgorithms
+		authMethods        []string
 		base64HostKey      string
 		hostKeyType        string
 		hostKeyFingerprint string
@@ -211,6 +343,8 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 		return nil, err
 	}
 
+	protoVersion, softwareVersion, comments := parseBanner(banner)
+
 	msg := []byte("SSH-2.0-Fingerprintx-SSH2\r\n")
 	response, err = shared.SendRecv(conn, msg, timeout)
 	if err != nil {
@@ -219,49 +353,11 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 
 	algo, err = checkAlgo(response)
 	if err == nil {
-		// check auth methods
-		conf := ssh.ClientConfig{}
-		conf.Timeout = timeout
-		conf.Auth = nil
-		conf.Auth = append(conf.Auth, ssh.Password("admin"))
-		conf.Auth = append(conf.Auth,
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-				answers := make([]string, len(questions))
-				for i := range answers {
-					answers[i] = "password"
-				}
-				return answers, nil
-			}),
-		)
+		algorithms = algoMapToStruct(algo)
 
-		conf.User = "admin"
-		conf.HostKeyCallback = ssh.InsecureIgnoreHostKey()
-		conf.KeyExchanges = append(conf.KeyExchanges,
-			"diffie-hellman-group-exchange-sha256",
-			"diffie-hellman-group-exchange-sha1",
-			"diffie-hellman-group1-sha1",
-			"diffie-hellman-group14-sha1",
-			"diffie-hellman-group14-sha256",
-			"ecdh-sha2-nistp256",
-			"ecdh-sha2-nistp384",
-			"ecdh-sha2-nistp521",
-			"curve25519-sha256@libssh.org",
-			"curve25519-sha256",
-		)
-		conf.Ciphers = append(conf.Ciphers,
-			"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-gcm@openssh.com",
-			"chacha20-poly1305@openssh.com",
-			"arcfour256", "arcfour128", "arcfour",
-			"aes128-cbc",
-			"3des-cbc",
-		)
-
-		authClient, err := ssh.Dial("tcp", target.Address.String(), &conf)
-		if err != nil {
-			passwordAuth = strings.Contains(err.Error(), "password") || strings.Contains(err.Error(), "keyboard-interactive")
-		}
-		if authClient != nil {
-			authClient.Close()
+		// probe auth methods (best-effort)
+		if methods, probeErr := probeAuthMethods(target.Address.String(), timeout); probeErr == nil {
+			authMethods = methods
 		}
 
 		sshConfig := &ssh.ClientConfig{}
@@ -354,10 +450,22 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 		}
 	}
 
+	passwordAuth := false
+	for _, m := range authMethods {
+		if m == "password" || m == "keyboard-interactive" {
+			passwordAuth = true
+			break
+		}
+	}
+
 	payload := ServiceSSH{
 		Banner:              banner,
+		ProtocolVersion:     protoVersion,
+		SoftwareVersion:     softwareVersion,
+		Comments:            comments,
+		Algorithms:          algorithms,
+		AuthMethods:         authMethods,
 		PasswordAuthEnabled: passwordAuth,
-		Algo:                fmt.Sprintf("%s", algo),
 	}
 
 	if base64HostKey != "" {

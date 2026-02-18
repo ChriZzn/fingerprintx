@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Constants for NTLM message types
@@ -52,6 +53,19 @@ type TargetInfo struct {
 	DNSComputerName     string
 	DNSDomainName       string
 	ForestName          string
+	Timestamp           time.Time
+}
+
+const filetimeEpochDiff = 116444736000000000
+
+func filetimeToTime(ft uint64) time.Time {
+	if ft <= filetimeEpochDiff {
+		return time.Time{}
+	}
+	intervals := int64(ft) - filetimeEpochDiff
+	sec := intervals / 10_000_000
+	nsec := (intervals % 10_000_000) * 100
+	return time.Unix(sec, nsec).UTC()
 }
 
 // ParseChallenge parses an NTLM challenge message and extracts target information
@@ -155,6 +169,12 @@ func parseTargetInfo(response []byte, challengeData Challenge, info *TargetInfo)
 				info.DNSDomainName = value
 			case "DNSTreeName":
 				info.ForestName = value
+			}
+		} else if avPair.AvID == 7 && avPair.AvLen == 8 {
+			valueEnd := currIdx + 4 + 8
+			if valueEnd <= len(response) {
+				ft := binary.LittleEndian.Uint64(response[currIdx+4 : valueEnd])
+				info.Timestamp = filetimeToTime(ft)
 			}
 		}
 

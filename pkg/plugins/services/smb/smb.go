@@ -18,13 +18,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/shared/ntlm"
+	"fmt"
 	"net"
 	"reflect"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared/ntlm"
 )
 
 type Plugin struct{}
@@ -86,6 +87,72 @@ type NTLMChallenge struct {
 	// Payload (variable)
 }
 
+var dialectNames = map[uint16]string{
+	0x0202: "2.0.2",
+	0x0210: "2.1",
+	0x0300: "3.0",
+	0x0302: "3.0.2",
+	0x0311: "3.1.1",
+}
+
+func formatDialect(d uint16) string {
+	if name, ok := dialectNames[d]; ok {
+		return name
+	}
+	return fmt.Sprintf("unknown(0x%04X)", d)
+}
+
+type capabilityFlag struct {
+	mask uint32
+	name string
+}
+
+var capabilityFlags = []capabilityFlag{
+	{0x00000001, "DFS"},
+	{0x00000002, "LEASING"},
+	{0x00000004, "LARGE_MTU"},
+	{0x00000008, "MULTI_CHANNEL"},
+	{0x00000010, "PERSISTENT_HANDLES"},
+	{0x00000020, "DIRECTORY_LEASING"},
+	{0x00000040, "ENCRYPTION"},
+}
+
+func decodeCapabilities(caps uint32) []string {
+	if caps == 0 {
+		return nil
+	}
+	var result []string
+	for _, f := range capabilityFlags {
+		if caps&f.mask != 0 {
+			result = append(result, f.name)
+		}
+	}
+	return result
+}
+
+const smbFiletimeEpochDiff = 116444736000000000
+
+func filetimeToString(ft uint64) string {
+	if ft <= smbFiletimeEpochDiff {
+		return ""
+	}
+	intervals := int64(ft) - smbFiletimeEpochDiff
+	sec := intervals / 10_000_000
+	nsec := (intervals % 10_000_000) * 100
+	return time.Unix(sec, nsec).UTC().Format(time.RFC3339)
+}
+
+func formatServerGUID(guid [16]byte) string {
+	// Windows GUID: first 3 groups are little-endian, last 2 are big-endian
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		binary.LittleEndian.Uint32(guid[0:4]),
+		binary.LittleEndian.Uint16(guid[4:6]),
+		binary.LittleEndian.Uint16(guid[6:8]),
+		guid[8:10],
+		guid[10:16],
+	)
+}
+
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
@@ -97,7 +164,7 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 	negotiateReqPacket := []byte{
 		// NetBios Session Service
 		0x00,             // Message Type
-		0x00, 0x00, 0x66, // Length
+		0x00, 0x00, 0x6C, // Length
 
 		// SMBv2 Packet Header
 		0xFE, 0x53, 0x4D, 0x42, // ProtocolId
@@ -117,14 +184,17 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 
 		// SMBv2 Negotiate Request
 		0x24, 0x00, // StructureSize
-		0x01, 0x00, // DialectCount
+		0x04, 0x00, // DialectCount
 		0x01, 0x00, // SecurityMode (Signing Enabled)
 		0x00, 0x00, // Reserved
 		0x00, 0x00, 0x00, 0x00, // Capabilities
 		0x13, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, // ClientGuid
 		0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x37, // ClientGuid (continued)
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ClientStartTime
-		0x02, 0x02, // Dialects (SMB 2.0.2)
+		0x02, 0x02, // Dialects: SMB 2.0.2
+		0x10, 0x02, //           SMB 2.1
+		0x00, 0x03, //           SMB 3.0
+		0x02, 0x03, //           SMB 3.0.2
 	}
 	sessionPrefixLen := 4
 	packetHeaderLen := 64
@@ -178,6 +248,15 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 	}
 	info.SigningEnabled = signingEnabled
 	info.SigningRequired = signingRequired
+
+	info.DialectRevision = formatDialect(negotiateResponseData.DialectRevision)
+	info.ServerGUID = formatServerGUID(negotiateResponseData.ServerGUID)
+	info.Capabilities = decodeCapabilities(negotiateResponseData.Capabilities)
+	info.MaxTransactSize = negotiateResponseData.MaxTransactSize
+	info.MaxReadSize = negotiateResponseData.MaxReadSize
+	info.MaxWriteSize = negotiateResponseData.MaxWriteSize
+	info.SystemTime = filetimeToString(negotiateResponseData.SystemTime)
+	info.ServerStartTime = filetimeToString(negotiateResponseData.ServerStartTime)
 
 	/**
 	 * At this point, we know SMBv2 is detected.
@@ -259,6 +338,9 @@ func DetectSMBv2(conn net.Conn, timeout time.Duration) (*ServiceSMB, error) {
 	info.DNSComputerName = targetInfo.DNSComputerName
 	info.DNSDomainName = targetInfo.DNSDomainName
 	info.ForestName = targetInfo.ForestName
+	if !targetInfo.Timestamp.IsZero() {
+		info.NTLMTimestamp = targetInfo.Timestamp.UTC().Format(time.RFC3339)
+	}
 
 	return &info, nil
 

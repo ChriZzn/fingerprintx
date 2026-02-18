@@ -156,7 +156,7 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 	}
 
 	// Favicon
-	service.Favicon = GetFavicon(client, baseURL, body)
+	service.Favicon = GetFavicon(baseURL, body)
 
 	// Headers
 	for key, values := range resp.Header {

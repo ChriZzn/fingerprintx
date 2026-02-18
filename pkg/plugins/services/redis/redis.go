@@ -16,55 +16,139 @@ package redis
 
 import (
 	"bytes"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 )
 
 type Plugin struct{}
 
-type Info struct {
-	AuthRequired bool
-}
-
 const REDIS = "redis"
 
-// Check if the response is from a Redis server
-// returns an error if it's not validated as a Redis server
-// and a Info struct with AuthRequired if it is
-func checkRedis(data []byte) (Info, error) {
-	// a valid pong response will be the 7 bytes [+PONG(CR)(NL)]
-	pong := [7]byte{0x2b, 0x50, 0x4f, 0x4e, 0x47, 0x0d, 0x0a}
-	// an auth error will start with the 7 bytes: [-NOAUTH]
-	noauth := [7]byte{0x2d, 0x4e, 0x4f, 0x41, 0x55, 0x54, 0x48}
+type pingResult struct {
+	AuthRequired  bool
+	ProtectedMode bool
+	ErrorMessage  string
+}
 
-	msgLength := len(data)
-	if msgLength < 7 {
-		return Info{}, &shared.InvalidResponseErrorInfo{
+// buildRESPCommand encodes a Redis command as a RESP array of bulk strings.
+// e.g. buildRESPCommand("PING") => "*1\r\n$4\r\nPING\r\n"
+func buildRESPCommand(args ...string) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("*%d\r\n", len(args)))
+	for _, arg := range args {
+		buf.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg))
+	}
+	return buf.Bytes()
+}
+
+// parseBulkString parses a RESP bulk string response: $<len>\r\n<body>\r\n
+// Returns the body bytes, or nil if the response is not a valid bulk string.
+func parseBulkString(data []byte) []byte {
+	if len(data) < 4 || data[0] != '$' {
+		return nil
+	}
+
+	crlfIdx := bytes.Index(data, []byte("\r\n"))
+	if crlfIdx < 0 {
+		return nil
+	}
+
+	length, err := strconv.Atoi(string(data[1:crlfIdx]))
+	if err != nil || length < 0 {
+		return nil
+	}
+
+	bodyStart := crlfIdx + 2
+	bodyEnd := bodyStart + length
+	if bodyEnd > len(data) {
+		return nil
+	}
+
+	return data[bodyStart:bodyEnd]
+}
+
+// parseInfoSection parses a Redis INFO response into key-value pairs.
+// Lines starting with # are headers and are skipped, as are blank lines.
+func parseInfoSection(data []byte) map[string]string {
+	result := make(map[string]string)
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		result[key] = value
+	}
+	return result
+}
+
+// parseRESPError parses a RESP error response: -ERRTYPE message\r\n
+// Returns the error type (e.g. "NOAUTH") and the full message text.
+func parseRESPError(data []byte) (errType, message string) {
+	if len(data) < 2 || data[0] != '-' {
+		return "", ""
+	}
+
+	// Strip leading '-' and trailing \r\n
+	line := string(data[1:])
+	if idx := strings.Index(line, "\r\n"); idx >= 0 {
+		line = line[:idx]
+	}
+
+	errType, message, ok := strings.Cut(line, " ")
+	if !ok {
+		return line, line
+	}
+	return errType, errType + " " + message
+}
+
+// checkRedis validates a PING response from a Redis server.
+// Returns a pingResult describing the server state, or an error if the
+// response does not look like Redis at all.
+func checkRedis(data []byte) (pingResult, error) {
+	if len(data) < 5 {
+		return pingResult{}, &shared.InvalidResponseErrorInfo{
 			Service: REDIS,
 			Info:    "too short of a response",
 		}
 	}
 
-	if msgLength == 7 {
-		if bytes.Equal(data, pong[:]) {
-			// Valid PONG response means redis server and no auth
-			return Info{AuthRequired: false}, nil
-		}
-		return Info{}, &shared.InvalidResponseErrorInfo{
-			Service: REDIS,
-			Info:    "invalid PONG response",
-		}
+	// +PONG\r\n — no auth required
+	if bytes.Equal(data, []byte("+PONG\r\n")) {
+		return pingResult{}, nil
 	}
-	if !bytes.Equal(data[:7], noauth[:]) {
-		return Info{}, &shared.InvalidResponseErrorInfo{
-			Service: REDIS,
-			Info:    "invalid Error response",
+
+	// Error responses start with '-'
+	if data[0] == '-' {
+		errType, msg := parseRESPError(data)
+		switch errType {
+		case "NOAUTH":
+			return pingResult{
+				AuthRequired: true,
+				ErrorMessage: msg,
+			}, nil
+		case "DENIED":
+			return pingResult{
+				AuthRequired:  true,
+				ProtectedMode: true,
+				ErrorMessage:  msg,
+			}, nil
 		}
 	}
 
-	return Info{AuthRequired: true}, nil
+	return pingResult{}, &shared.InvalidResponseErrorInfo{
+		Service: REDIS,
+		Info:    "unrecognized response",
+	}
 }
 
 func init() {
@@ -72,27 +156,7 @@ func init() {
 }
 
 func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	//https://redis.io/commands/ping/
-	// PING is a supported command since 1.0.0
-	// [*1(CR)(NL)$4(CR)(NL)PING(CR)(NL)]
-	ping := []byte{
-		0x2a,
-		0x31,
-		0x0d,
-		0x0a,
-		0x24,
-		0x34,
-		0x0d,
-		0x0a,
-		0x50,
-		0x49,
-		0x4e,
-		0x47,
-		0x0d,
-		0x0a,
-	}
-
-	response, err := shared.SendRecv(conn, ping, timeout)
+	response, err := shared.SendRecv(conn, buildRESPCommand("PING"), timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -104,9 +168,26 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 	if err != nil {
 		return nil, nil
 	}
+
 	payload := ServiceRedis{
-		AuthRequired: result.AuthRequired,
+		AuthRequired:  result.AuthRequired,
+		ProtectedMode: result.ProtectedMode,
+		ErrorMessage:  result.ErrorMessage,
 	}
+
+	// If no auth is required, try to enrich with INFO server data.
+	if !result.AuthRequired {
+		infoResp, err := shared.SendRecv(conn, buildRESPCommand("INFO", "server"), timeout)
+		if err == nil && len(infoResp) > 0 {
+			if body := parseBulkString(infoResp); body != nil {
+				info := parseInfoSection(body)
+				payload.Version = info["redis_version"]
+				payload.RedisMode = info["redis_mode"]
+				payload.OS = info["os"]
+			}
+		}
+	}
+
 	return plugins.CreateServiceFrom(target, p.Name(), payload, conn.TLS()), nil
 }
 

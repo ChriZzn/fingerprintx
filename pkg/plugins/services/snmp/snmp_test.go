@@ -15,6 +15,7 @@
 package snmp
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
@@ -29,7 +30,18 @@ func TestSNMP(t *testing.T) {
 			Port:        161,
 			Protocol:    plugins.UDP,
 			Expected: func(res *plugins.Service) bool {
-				return res != nil
+				if res == nil {
+					return false
+				}
+				raw, err := json.Marshal(res.Metadata)
+				if err != nil {
+					return false
+				}
+				var meta ServiceSNMP
+				if err := json.Unmarshal(raw, &meta); err != nil {
+					return false
+				}
+				return meta.SysDescr != ""
 			},
 			RunConfig: dockertest.RunOptions{
 				Repository:   "polinux/snmpd",

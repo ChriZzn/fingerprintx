@@ -40,6 +40,12 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 	if len(response) == 0 || err != nil {
 		return nil, nil
 	}
+
+	// FTP banners must start with a 3-digit status code (e.g. "220 Welcome")
+	if !ftpResponse.Match(response) {
+		return nil, nil
+	}
+
 	b := strings.Split(string(response), "\r\n")
 	trace := string(response)
 

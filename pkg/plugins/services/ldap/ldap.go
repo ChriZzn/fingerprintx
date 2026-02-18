@@ -17,12 +17,12 @@ package ldap
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 	"math/rand"
 	"net"
 	"time"
 
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
+	"github.com/chrizzn/fingerprintx/pkg/plugins/shared"
 )
 
 type Plugin struct{}
@@ -32,48 +32,6 @@ const LDAP = "ldap"
 func init() {
 	plugins.RegisterPlugin(&Plugin{})
 }
-
-/*
-
-Data is BER encoded (Basic Encoding Rules) - Format: Type-Length-Value
-
-Type:
-	Format of Types: Bits 	 8-7	6					5-1
-					 Purpose Class Prim/Constructed		Tag Number
-
-	For example 00 11 00 00 represents the Class (Universal) Constructed Sequence (Sequence is tag number 1 00 00)
-	Ie: The sequence tag
-Length:
-	Single Byte - Length is a single byte containing the number of bytes in the message up to 127
-	Multi Bsyte - The most significant bit is set to 1. The remaining 7 bytes are used to indicate how
-	many bytes are needed to represent the length, followed by that many bytes
-
-
-
-Example Bind Request
-0000   30 2b 02 01 01 60 26 02 01 03 04 1a 63 6e 3d 61
-0010   64 6d 69 6e 2c 64 63 3d 65 78 61 6d 70 6c 65 2c
-0020   64 63 3d 6f 72 67 80 05 61 64 6d 69 6e
-
-Notes:
-
-The messageId MUST be non-zero and different from any other request in the session
-
-30 2b ... Represents a universal sequence containing 43 bytes
-
-02 01 01 Represents an Integer (02) type, length 1 byte, and value of 1
-    (denoting a message Id of 1) - this number is reflected back in responses
-
-60 26 denotes a bind request of 38 bytes
-
-02 01 03 represents an integer of 1 byte with a value of 3 (the protocol version)
-
-04 1a 63 6e 3d 61 64 6d 69 6e 2c 64 63 3d 65 78 61 6d 70 6c 65 2c 64 63 3d 6f 72 67
-Represents a universal string (04) of length 26 bytes containing the value 'cn=admin,dc=example,dc=org'
-
-80 05 61 64 6d 69 6e Represents a context specific 5 length string holding the simple auth password of 'admin'
-
-*/
 
 func generateRandomString(length int) []byte {
 	charset := "abcdefghijklmnopqrstuvwxyz"
@@ -86,7 +44,6 @@ func generateRandomString(length int) []byte {
 }
 
 func generateBindRequestAndID() [2][]byte {
-	rand.Seed(time.Now().UnixNano())
 	sequenceBERHeader := [2]byte{0x30, 0x3a}
 	messageID := uint32(rand.Int31()) //nolint:gosec
 	messageIDBytes := [4]byte{}
@@ -99,7 +56,6 @@ func generateBindRequestAndID() [2][]byte {
 	versionBER := [3]byte{0x02, 0x01, 0x03}
 	stringBERHeader := [2]byte{0x04, 0x17}
 	stringContextBERHeader := [2]byte{0x80, 0x14}
-	// We attempt to auth with a random distinguished name and password (generated below)
 	randomAlphaString := generateRandomString(20)
 	dePrefix := []byte("cn=")
 	distinguishedName := append(dePrefix, randomAlphaString...) //nolint:gocritic
@@ -123,52 +79,180 @@ func generateBindRequestAndID() [2][]byte {
 	return [2][]byte{fullBindRequest, finalMessageIDBER}
 }
 
-func DetectLDAP(conn net.Conn, timeout time.Duration) (bool, error) {
+// DetectLDAP sends a bind request and validates the response format.
+// Returns (detected, response bytes, error).
+func DetectLDAP(conn net.Conn, timeout time.Duration) (bool, []byte, error) {
 	requestAndID := generateBindRequestAndID()
 
 	response, err := shared.SendRecv(conn, requestAndID[0], timeout)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if len(response) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
 
 	expectedSequenceByte := byte(0x30)
 	expectedMessageLengthByte := byte(len(response) - 2)
-	// The LDAP header should have the right message ID bytes, the right sequence byte (the first byte),
-	// and the right length byte
 	expectedLDAPHeader := append(
 		[]byte{expectedSequenceByte, expectedMessageLengthByte},
 		requestAndID[1]...)
 
-	// We might be able to try to look at the specific response message in responseBuff to try to fingerprint the specific
-	// vendor, but didn't attempt to do that in this current version (might be more time than value added currently)
-
-	// In other versions, bytes at response[1:5] may differ so we remove these bytes and
-	// perform the expected header check against this 'otherVersionResponse' as well
 	if len(response) < 7 {
-		return false, nil
+		return false, nil, nil
 	}
 	otherVersionResponse := append([]byte{response[0]}, response[5]+4)
 	otherVersionResponse = append(otherVersionResponse, response[6:]...)
 
 	if bytes.HasPrefix(response, expectedLDAPHeader) || bytes.HasPrefix(otherVersionResponse, expectedLDAPHeader) {
-		return true, nil
+		return true, response, nil
 	}
-	return false, nil
+	return false, nil, nil
+}
+
+// trySTARTTLS attempts an LDAP STARTTLS extended operation on the connection.
+// Returns true if the server accepted STARTTLS and the TLS upgrade succeeded.
+// On any failure, returns false without affecting the connection's usability for
+// further LDAP operations (unless the connection is broken).
+func trySTARTTLS(conn *plugins.FingerprintConn, timeout time.Duration) bool {
+	// Only attempt on non-TLS connections
+	if conn.TLS() != nil {
+		return false
+	}
+
+	req := buildSTARTTLSRequest(2)
+	response, err := shared.SendRecv(conn, req, timeout)
+	if err != nil || len(response) == 0 {
+		return false
+	}
+
+	// Parse ExtendedResponse — check resultCode == 0 (success)
+	messages, err := parseLDAPMessages(response)
+	if err != nil || len(messages) == 0 {
+		return false
+	}
+	if parseResultCode(messages[0]) != 0 {
+		return false
+	}
+
+	// Upgrade to TLS
+	conn.Upgrade()
+	return conn.TLS() != nil
+}
+
+// queryRootDSE sends a SearchRequest for the RootDSE and returns parsed attributes.
+// Returns nil on any error (graceful degradation).
+func queryRootDSE(conn net.Conn, timeout time.Duration) map[string][]string {
+	req := buildRootDSESearch(3)
+	err := shared.Send(conn, req, timeout)
+	if err != nil {
+		return nil
+	}
+
+	// Read response — may arrive in multiple TCP segments.
+	// We need SearchResultEntry + SearchResultDone.
+	var buf []byte
+	for i := 0; i < 3; i++ {
+		chunk, err := shared.Recv(conn, timeout)
+		if err != nil || len(chunk) == 0 {
+			break
+		}
+		buf = append(buf, chunk...)
+
+		// Check if we have a SearchResultDone (tag 0x65) — that terminates the search.
+		if containsSearchResultDone(buf) {
+			break
+		}
+	}
+	if len(buf) == 0 {
+		return nil
+	}
+
+	messages, err := parseLDAPMessages(buf)
+	if err != nil && len(messages) == 0 {
+		return nil
+	}
+
+	// Find the SearchResultEntry among the messages
+	for _, msg := range messages {
+		if len(msg.Children) >= 2 && msg.Children[1].Tag == ldapSearchResultEntry {
+			return parseSearchResultEntry(msg)
+		}
+	}
+	return nil
+}
+
+// containsSearchResultDone scans for the SearchResultDone tag (0x65) at a valid
+// LDAP message boundary (inside a SEQUENCE 0x30).
+func containsSearchResultDone(data []byte) bool {
+	msgs, _ := parseLDAPMessages(data)
+	for _, msg := range msgs {
+		if len(msg.Children) >= 2 && msg.Children[1].Tag == ldapSearchResultDone {
+			return true
+		}
+	}
+	return false
+}
+
+// populateMetadata fills the ServiceLDAP struct from RootDSE attributes.
+func populateMetadata(attrs map[string][]string) ServiceLDAP {
+	svc := ServiceLDAP{}
+	if attrs == nil {
+		return svc
+	}
+
+	// Helper to get first value
+	first := func(key string) string {
+		if v, ok := attrs[key]; ok && len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	}
+
+	// Standard RootDSE (RFC 4512)
+	svc.NamingContexts = attrs["namingcontexts"]
+	svc.SubschemaSubentry = first("subschemasubentry")
+	svc.SupportedLDAPVersions = attrs["supportedldapversion"]
+	svc.SupportedSASLMechs = attrs["supportedsaslmechanisms"]
+	svc.SupportedExtensions = attrs["supportedextension"]
+	svc.SupportedControls = attrs["supportedcontrol"]
+	svc.VendorName = first("vendorname")
+	svc.VendorVersion = first("vendorversion")
+
+	// Active Directory
+	svc.DNSHostName = first("dnshostname")
+	svc.DefaultNamingContext = first("defaultnamingcontext")
+	svc.DomainFunctionality = first("domainfunctionality")
+	svc.ForestFunctionality = first("forestfunctionality")
+	svc.DomainControllerFunctionality = first("domaincontrollerfunctionality")
+	svc.ServerName = first("servername")
+	svc.IsGlobalCatalogReady = first("isglobalcatalogready")
+
+	return svc
 }
 
 func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
-	isLDAP, err := DetectLDAP(conn, timeout)
+	isLDAP, _, err := DetectLDAP(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
-
-	if isLDAP {
-		return plugins.CreateServiceFrom(target, p.Name(), ServiceLDAP{}, conn.TLS()), nil
+	if !isLDAP {
+		return nil, nil
 	}
-	return nil, nil
+
+	// LDAP detected — now gather metadata (all best-effort)
+
+	// Try STARTTLS on non-TLS connections
+	startTLS := trySTARTTLS(conn, timeout)
+
+	// Query RootDSE for server info
+	attrs := queryRootDSE(conn, timeout)
+
+	// Build metadata
+	svc := populateMetadata(attrs)
+	svc.StartTLSSupported = startTLS
+
+	return plugins.CreateServiceFrom(target, p.Name(), svc, conn.TLS()), nil
 }
 
 func (p *Plugin) Name() string {

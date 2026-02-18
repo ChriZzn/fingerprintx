@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"github.com/spaolacci/murmur3"
 	"golang.org/x/net/html"
 	"io"
@@ -11,16 +12,33 @@ import (
 	"strings"
 )
 
-func GetFavicon(client *http.Client, baseUrl string, body []byte) (favicon Favicon) {
+func normalizeURL(host string, url string) string {
+	if !strings.HasPrefix(url, "http") || !strings.HasPrefix(url, "https://") {
+		if !strings.HasPrefix(url, "/") {
+			url = "/" + url
+		}
+		return host + url
+	}
+	return url
+}
+
+func GetFavicon(baseUrl string, body []byte) (favicon Favicon) {
 
 	// Get potential FavIcon URLs
 	hrefs, _, _ := extractPotentialFavIconsURLs(body)
+
 	if len(hrefs) == 0 {
 		hrefs = append(hrefs, "favicon.ico")
 	}
+	for i, href := range hrefs {
+		hrefs[i] = normalizeURL(baseUrl, href)
+	}
 
-	for _, href := range hrefs {
-		r, err := client.Get(baseUrl + "/" + href)
+	// loose Client for dynamic host scraping (different host)
+	c := &http.Client{}
+
+	for _, url := range hrefs {
+		r, err := c.Get(url)
 		if err == nil && r.StatusCode == 200 {
 			defer r.Body.Close()
 			data, _ := io.ReadAll(r.Body)
@@ -76,6 +94,7 @@ func extractPotentialFavIconsURLs(resp []byte) (candidates []string, baseHref st
 
 			// Handle link tags
 			if n.Data == "link" {
+				fmt.Println("Found link tag", n.Attr)
 				var rel, href string
 				for _, attr := range n.Attr {
 					switch attr.Key {
@@ -85,11 +104,10 @@ func extractPotentialFavIconsURLs(resp []byte) (candidates []string, baseHref st
 						href = strings.TrimSpace(attr.Val)
 					}
 				}
-
 				if href != "" {
 					for _, tok := range strings.Fields(rel) {
 						switch tok {
-						case "icon", "shortcut", "shortcut-icon", "apple-touch-icon", "mask-icon", "alternate":
+						case "icon", "shortcut", "shortcut-icon", "apple-touch-icon", "mask-icon", "alternate", "shortcut icon":
 							candidates = append(candidates, href)
 							return
 						}
