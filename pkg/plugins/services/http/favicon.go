@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"encoding/base64"
-	"fmt"
 	"github.com/spaolacci/murmur3"
 	"golang.org/x/net/html"
 	"io"
@@ -94,7 +93,6 @@ func extractPotentialFavIconsURLs(resp []byte) (candidates []string, baseHref st
 
 			// Handle link tags
 			if n.Data == "link" {
-				fmt.Println("Found link tag", n.Attr)
 				var rel, href string
 				for _, attr := range n.Attr {
 					switch attr.Key {
