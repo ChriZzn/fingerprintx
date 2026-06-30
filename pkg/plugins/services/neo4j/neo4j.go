@@ -173,7 +173,7 @@ func (p *NEO4JPlugin) Type() plugins.Protocol {
 }
 
 func (p *NEO4JPlugin) Priority() int {
-	return -1
+	return 900
 }
 
 func (p *NEO4JPlugin) Ports() []uint16 {

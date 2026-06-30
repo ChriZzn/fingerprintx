@@ -958,11 +958,11 @@ func tryMongoDBQueryProtocol(conn net.Conn, timeout time.Duration) (mongoDBMetad
 // Detection Strategy:
 //  1. DETECTION PHASE: Use hello/isMaster commands to detect MongoDB and extract metadata
 //     - PRIMARY PATH (OP_QUERY): Try OP_QUERY + "hello", then OP_QUERY + "isMaster"
-//       Works on ALL MongoDB versions, including 5.1+ (handshake exception)
-//       Extracts: version, maxWireVersion, minWireVersion, serverType
+//     Works on ALL MongoDB versions, including 5.1+ (handshake exception)
+//     Extracts: version, maxWireVersion, minWireVersion, serverType
 //     - SECONDARY PATH (OP_MSG): Try OP_MSG + "hello", then OP_MSG + "isMaster"
-//       Works on MongoDB 3.6+ only
-//       Extracts: version, maxWireVersion, minWireVersion, serverType
+//     Works on MongoDB 3.6+ only
+//     Extracts: version, maxWireVersion, minWireVersion, serverType
 //  2. ENRICHMENT PHASE: If version not found in hello/isMaster, try buildInfo
 //     - Attempts buildInfo with both OP_QUERY and OP_MSG protocols
 //     - If buildInfo fails (e.g., requires auth), still returns MongoDB detection
@@ -1053,10 +1053,9 @@ func (p *MONGODBPlugin) Type() plugins.Protocol {
 }
 
 func (p *MONGODBPlugin) Priority() int {
-	return -1
+	return 900
 }
 
 func (p *MONGODBPlugin) Ports() []uint16 {
 	return []uint16{27017}
 }
-
