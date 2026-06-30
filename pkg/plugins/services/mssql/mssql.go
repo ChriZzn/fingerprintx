@@ -545,7 +545,7 @@ func (p *Plugin) Type() plugins.Protocol {
 }
 
 func (p *Plugin) Priority() int {
-	return 143
+	return 150
 }
 
 func (p *Plugin) Ports() []uint16 {

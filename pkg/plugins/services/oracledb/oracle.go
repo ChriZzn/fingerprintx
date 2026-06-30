@@ -258,7 +258,7 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 }
 
 func (p *Plugin) Priority() int {
-	return 900
+	return 210
 }
 
 func (p *Plugin) Ports() []uint16 {

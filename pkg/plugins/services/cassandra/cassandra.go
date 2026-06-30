@@ -107,8 +107,9 @@ func init() {
 // OPTIONS is sent before STARTUP to query server capabilities without authentication.
 //
 // Frame structure (13 bytes):
-//   [version|flags|stream|opcode|length]
-//   [0x04   |0x00 |0x0000|0x05  |0x00000000]
+//
+//	[version|flags|stream|opcode|length]
+//	[0x04   |0x00 |0x0000|0x05  |0x00000000]
 //
 // Returns:
 //   - []byte: Complete OPTIONS frame ready to send
@@ -117,7 +118,7 @@ func buildOPTIONSFrame() []byte {
 		PROTOCOL_V4_REQUEST, // version: v4 request
 		0x00,                // flags: none
 		0x00, 0x00,          // stream: 0
-		OP_OPTIONS,          // opcode: OPTIONS
+		OP_OPTIONS,             // opcode: OPTIONS
 		0x00, 0x00, 0x00, 0x00, // length: 0 (empty body)
 	}
 }
@@ -447,9 +448,9 @@ func extractCassandraVersion(multimap map[string][]string) cassandraMetadata {
 func buildCassandraCPE(product, version string) string {
 	// CPE templates by product
 	cpeTemplates := map[string]string{
-		"Apache Cassandra":      "cpe:2.3:a:apache:cassandra:%s:*:*:*:*:*:*:*",
-		"ScyllaDB":              "cpe:2.3:a:scylladb:scylla:%s:*:*:*:*:*:*:*",
-		"DataStax Enterprise":   "cpe:2.3:a:datastax:datastax_enterprise:%s:*:*:*:*:*:*:*",
+		"Apache Cassandra":    "cpe:2.3:a:apache:cassandra:%s:*:*:*:*:*:*:*",
+		"ScyllaDB":            "cpe:2.3:a:scylladb:scylla:%s:*:*:*:*:*:*:*",
+		"DataStax Enterprise": "cpe:2.3:a:datastax:datastax_enterprise:%s:*:*:*:*:*:*:*",
 	}
 
 	// Default to Apache Cassandra if product unknown
@@ -568,5 +569,5 @@ func (p *CassandraPlugin) Type() plugins.Protocol {
 // Priority returns the plugin execution priority.
 // 100 = standard priority (run after high-priority protocols like SSH, before HTTP)
 func (p *CassandraPlugin) Priority() int {
-	return 100
+	return 280
 }

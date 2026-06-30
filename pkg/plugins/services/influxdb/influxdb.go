@@ -88,9 +88,9 @@ import (
 )
 
 const (
-	INFLUXDB                = "influxdb"
-	DefaultInfluxDBPort     = 8086
-	InfluxDBVersionHeader   = "x-influxdb-version"
+	INFLUXDB              = "influxdb"
+	DefaultInfluxDBPort   = 8086
+	InfluxDBVersionHeader = "x-influxdb-version"
 )
 
 type InfluxDBPlugin struct{}
@@ -351,5 +351,5 @@ func (p *InfluxDBPlugin) Type() plugins.Protocol {
 }
 
 func (p *InfluxDBPlugin) Priority() int {
-	return 100
+	return 320
 }

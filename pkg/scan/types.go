@@ -32,6 +32,11 @@ type Config struct {
 	// This may include the timeouts set on the handshake process and the time to wait for a response to return.
 	DefaultTimeout time.Duration
 
+	// Concurrency is the number of targets fingerprinted in parallel.
+	// A value <= 1 means sequential scanning (the default). Each target is still
+	// scanned in full by a single worker; concurrency only parallelizes across targets.
+	Concurrency int
+
 	// Prints logging messages to stderr
 	Verbose bool
 }

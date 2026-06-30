@@ -37,11 +37,12 @@ Phase 2: Enrichment via bind_transceiver
   - Identify vendor from system_id patterns
 
 PDU Structure (16-byte header):
-  Offset  Size  Field            Description
-  0       4     command_length   Total PDU length (big-endian)
-  4       4     command_id       Operation identifier (big-endian)
-  8       4     command_status   Result code (big-endian)
-  12      4     sequence_number  Request/response correlation (big-endian)
+
+	Offset  Size  Field            Description
+	0       4     command_length   Total PDU length (big-endian)
+	4       4     command_id       Operation identifier (big-endian)
+	8       4     command_status   Result code (big-endian)
+	12      4     sequence_number  Request/response correlation (big-endian)
 
 Key Command IDs:
   - enquire_link: 0x00000015
@@ -70,16 +71,16 @@ import (
 )
 
 const (
-	SMPP                   = "smpp"
-	MIN_RESPONSE_SIZE      = 16
-	PDU_HEADER_SIZE        = 16
-	CMD_ENQUIRE_LINK       = 0x00000015
-	CMD_ENQUIRE_LINK_RESP  = 0x80000015
-	CMD_BIND_TRANSCEIVER   = 0x00000009
+	SMPP                      = "smpp"
+	MIN_RESPONSE_SIZE         = 16
+	PDU_HEADER_SIZE           = 16
+	CMD_ENQUIRE_LINK          = 0x00000015
+	CMD_ENQUIRE_LINK_RESP     = 0x80000015
+	CMD_BIND_TRANSCEIVER      = 0x00000009
 	CMD_BIND_TRANSCEIVER_RESP = 0x80000009
-	CMD_GENERIC_NACK       = 0x80000000
-	STATUS_OK              = 0x00000000
-	TLV_SC_INTERFACE_VERSION = 0x0210
+	CMD_GENERIC_NACK          = 0x80000000
+	STATUS_OK                 = 0x00000000
+	TLV_SC_INTERFACE_VERSION  = 0x0210
 )
 
 type SMPPPlugin struct{}
@@ -103,7 +104,7 @@ func (p *SMPPPlugin) Type() plugins.Protocol {
 }
 
 func (p *SMPPPlugin) Priority() int {
-	return 55 // After common services, before low-priority protocols
+	return 410
 }
 
 func (p *SMPPPlugin) Ports() []uint16 {
@@ -219,23 +220,23 @@ func enrichSMPP(conn net.Conn, timeout time.Duration, cachedBindResp []byte) (st
 // buildEnquireLinkPDU creates an enquire_link PDU (16 bytes, header only)
 func buildEnquireLinkPDU() []byte {
 	pdu := make([]byte, 16)
-	binary.BigEndian.PutUint32(pdu[0:4], 16)                  // command_length
-	binary.BigEndian.PutUint32(pdu[4:8], CMD_ENQUIRE_LINK)    // command_id
-	binary.BigEndian.PutUint32(pdu[8:12], 0)                  // command_status
-	binary.BigEndian.PutUint32(pdu[12:16], 1)                 // sequence_number
+	binary.BigEndian.PutUint32(pdu[0:4], 16)               // command_length
+	binary.BigEndian.PutUint32(pdu[4:8], CMD_ENQUIRE_LINK) // command_id
+	binary.BigEndian.PutUint32(pdu[8:12], 0)               // command_status
+	binary.BigEndian.PutUint32(pdu[12:16], 1)              // sequence_number
 	return pdu
 }
 
 // buildBindTransceiverPDU creates a bind_transceiver PDU with dummy credentials
 func buildBindTransceiverPDU() []byte {
 	// PDU body fields (all null-terminated C-Octet Strings except last 3 bytes)
-	systemID := "test\x00"           // 5 bytes
-	password := "test\x00"           // 5 bytes
-	systemType := "\x00"             // 1 byte (empty)
-	interfaceVersion := byte(0x34)   // 1 byte (0x34 = 3.4)
-	addrTON := byte(0)               // 1 byte
-	addrNPI := byte(0)               // 1 byte
-	addressRange := "\x00"           // 1 byte (empty)
+	systemID := "test\x00"         // 5 bytes
+	password := "test\x00"         // 5 bytes
+	systemType := "\x00"           // 1 byte (empty)
+	interfaceVersion := byte(0x34) // 1 byte (0x34 = 3.4)
+	addrTON := byte(0)             // 1 byte
+	addrNPI := byte(0)             // 1 byte
+	addressRange := "\x00"         // 1 byte (empty)
 
 	// Build body
 	body := []byte(systemID + password + systemType)
@@ -247,10 +248,10 @@ func buildBindTransceiverPDU() []byte {
 	pdu := make([]byte, pduLen)
 
 	// Header
-	binary.BigEndian.PutUint32(pdu[0:4], uint32(pduLen))           // command_length
-	binary.BigEndian.PutUint32(pdu[4:8], CMD_BIND_TRANSCEIVER)     // command_id
-	binary.BigEndian.PutUint32(pdu[8:12], 0)                       // command_status
-	binary.BigEndian.PutUint32(pdu[12:16], 2)                      // sequence_number
+	binary.BigEndian.PutUint32(pdu[0:4], uint32(pduLen))       // command_length
+	binary.BigEndian.PutUint32(pdu[4:8], CMD_BIND_TRANSCEIVER) // command_id
+	binary.BigEndian.PutUint32(pdu[8:12], 0)                   // command_status
+	binary.BigEndian.PutUint32(pdu[12:16], 2)                  // sequence_number
 
 	// Body
 	copy(pdu[16:], body)

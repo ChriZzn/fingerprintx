@@ -285,5 +285,5 @@ func (p *COUCHDBPlugin) Type() plugins.Protocol {
 }
 
 func (p *COUCHDBPlugin) Priority() int {
-	return 100
+	return 310
 }

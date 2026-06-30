@@ -78,7 +78,7 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 }
 
 func (p *Plugin) Priority() int {
-	return 505
+	return 250
 }
 
 func (p *Plugin) Name() string {

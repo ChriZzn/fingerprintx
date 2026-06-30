@@ -48,15 +48,15 @@ type ServiceKubernetes struct {
 
 // VersionInfo represents the structure of Kubernetes /version endpoint response
 type VersionInfo struct {
-	Major         string `json:"major"`
-	Minor         string `json:"minor"`
-	GitVersion    string `json:"gitVersion"`
-	GitCommit     string `json:"gitCommit"`
-	GitTreeState  string `json:"gitTreeState"`
-	BuildDate     string `json:"buildDate"`
-	GoVersion     string `json:"goVersion"`
-	Compiler      string `json:"compiler"`
-	Platform      string `json:"platform"`
+	Major        string `json:"major"`
+	Minor        string `json:"minor"`
+	GitVersion   string `json:"gitVersion"`
+	GitCommit    string `json:"gitCommit"`
+	GitTreeState string `json:"gitTreeState"`
+	BuildDate    string `json:"buildDate"`
+	GoVersion    string `json:"goVersion"`
+	Compiler     string `json:"compiler"`
+	Platform     string `json:"platform"`
 }
 
 func init() {
@@ -77,8 +77,7 @@ func (p *KubernetesPlugin) Type() plugins.Protocol {
 }
 
 func (p *KubernetesPlugin) Priority() int {
-	// Priority 30 - run before generic HTTP (100+) but after very specific protocols
-	return 30
+	return 170
 }
 
 func (p *KubernetesPlugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {

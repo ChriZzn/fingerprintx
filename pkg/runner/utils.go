@@ -44,6 +44,10 @@ func checkConfig(config cliConfig) error {
 		return errors.New("showErrors requires results being output in JSON or CSV format")
 	}
 
+	if config.concurrency < 1 {
+		return errors.New("concurrency must be at least 1")
+	}
+
 	return nil
 }
 
@@ -53,6 +57,7 @@ func createScanConfig(config cliConfig) scan.Config {
 		DefaultTimeout: time.Duration(config.timeout) * time.Millisecond,
 		FastMode:       config.fastMode,
 		FallBack:       config.fallBack,
+		Concurrency:    config.concurrency,
 		Verbose:        config.verbose,
 	}
 }

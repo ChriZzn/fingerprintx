@@ -197,5 +197,5 @@ func (p *MilvusMetricsPlugin) Type() plugins.Protocol {
 }
 
 func (p *MilvusMetricsPlugin) Priority() int {
-	return 51 // Run after main Milvus plugin (50)
+	return 430
 }

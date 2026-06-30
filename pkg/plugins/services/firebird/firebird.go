@@ -85,13 +85,13 @@ const (
 	FIREBIRD = "firebird"
 
 	// Protocol operation codes
-	opConnect     = 1  // Client initiates connection
-	opAccept      = 3  // Server accepts connection
-	opReject      = 4  // Server rejects connection (but confirms Firebird presence)
-	opResponse    = 9  // Error response with status vector
-	opCondAccept  = 20 // Conditional acceptance (protocol 13+)
-	opAcceptData  = 21 // Acceptance with authentication data (protocol 13+)
-	opAttach      = 2  // Attach to database operation
+	opConnect    = 1  // Client initiates connection
+	opAccept     = 3  // Server accepts connection
+	opReject     = 4  // Server rejects connection (but confirms Firebird presence)
+	opResponse   = 9  // Error response with status vector
+	opCondAccept = 20 // Conditional acceptance (protocol 13+)
+	opAcceptData = 21 // Acceptance with authentication data (protocol 13+)
+	opAttach     = 2  // Attach to database operation
 
 	// Protocol version constants
 	// FB_PROTOCOL_FLAG (0x8000) distinguishes Firebird from InterBase
@@ -195,7 +195,7 @@ func (p *FirebirdPlugin) Type() plugins.Protocol {
 
 // Priority returns the execution priority (default 100)
 func (p *FirebirdPlugin) Priority() int {
-	return 100
+	return 350
 }
 
 // buildConnectPacket constructs an op_connect packet offering protocols 10, 13, 16, 17

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
-	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"golang.org/x/net/html"
 	"io"
 	"net"
@@ -17,15 +16,10 @@ const HTTP = "http"
 const USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
 
 func init() {
-	wac, err := wappalyzer.New()
-	if err != nil {
-		panic("unable to initialize wappalyzer library")
-	}
-	plugins.RegisterPlugin(&Plugin{wappalyzer: wac})
+	plugins.RegisterPlugin(&Plugin{})
 }
 
 type Plugin struct {
-	wappalyzer  *wappalyzer.Wappalyze
 	FaviconHash int32 `json:"favicon_hash,omitempty"`
 }
 
@@ -59,27 +53,6 @@ func extractTitle(body []byte) (string, error) {
 			}
 		}
 	}
-}
-
-func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze) ([]string, []string, []string, error) {
-	var technologies, cpes, categories []string
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	fingerprint := analyzer.FingerprintWithInfo(resp.Header, data)
-	for tech, appInfo := range fingerprint {
-		technologies = append(technologies, tech)
-		if cpe := appInfo.CPE; cpe != "" {
-			cpes = append(cpes, cpe)
-		}
-		if cat := appInfo.Categories; cat != nil {
-			categories = append(categories, cat...)
-		}
-	}
-
-	return technologies, cpes, categories, nil
 }
 
 func HTTPClient(conn *plugins.FingerprintConn, timeout time.Duration) *http.Client {
@@ -139,14 +112,7 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 	defer resp.Body.Close()
 
 	// Enrich Data
-	body, err := io.ReadAll(resp.Body)
-
-	technologies, CPEs, cats, e := fingerprint(resp, p.wappalyzer)
-	if e == nil {
-		service.CPEs = CPEs
-		service.Technologies = technologies
-		service.Categories = cats
-	}
+	body, _ := io.ReadAll(resp.Body)
 
 	// HTTP Data
 	service.Status = resp.StatusCode
@@ -180,7 +146,7 @@ func (p *Plugin) Type() plugins.Protocol {
 }
 
 func (p *Plugin) Priority() int {
-	return 0
+	return 10
 }
 
 func (p *Plugin) Ports() []uint16 {

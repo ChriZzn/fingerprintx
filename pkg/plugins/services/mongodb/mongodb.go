@@ -1053,7 +1053,7 @@ func (p *MONGODBPlugin) Type() plugins.Protocol {
 }
 
 func (p *MONGODBPlugin) Priority() int {
-	return 900
+	return 180
 }
 
 func (p *MONGODBPlugin) Ports() []uint16 {

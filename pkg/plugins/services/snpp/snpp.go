@@ -158,7 +158,7 @@ func (p *SNPPPlugin) Type() plugins.Protocol {
 }
 
 func (p *SNPPPlugin) Priority() int {
-	return 10
+	return 420
 }
 
 func (p *SNPPPlugin) Ports() []uint16 {

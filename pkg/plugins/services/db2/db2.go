@@ -139,22 +139,24 @@ func init() {
 // parameters to reduce message size and avoid unnecessary complexity.
 //
 // Message structure:
-//   DDM Header (10 bytes):
-//     Length: 2 bytes (big-endian, total message length)
-//     Magic: 1 byte (0xD0)
-//     Format: 1 byte (0x01 = chained DSS, RQSDSS format)
-//     Codepoint: 2 bytes (0x1041 = EXCSAT)
-//     Correlation ID: 2 bytes (0x0001)
-//     Length2: 2 bytes (length - 6, per DRDA spec)
 //
-//   Parameters:
-//     EXTNAM (External Name): Client identification
-//       - Length: 2 bytes
-//       - Codepoint: 2 bytes (0x115E)
-//       - Data: ASCII string "fingerprintx"
+//	DDM Header (10 bytes):
+//	  Length: 2 bytes (big-endian, total message length)
+//	  Magic: 1 byte (0xD0)
+//	  Format: 1 byte (0x01 = chained DSS, RQSDSS format)
+//	  Codepoint: 2 bytes (0x1041 = EXCSAT)
+//	  Correlation ID: 2 bytes (0x0001)
+//	  Length2: 2 bytes (length - 6, per DRDA spec)
+//
+//	Parameters:
+//	  EXTNAM (External Name): Client identification
+//	    - Length: 2 bytes
+//	    - Codepoint: 2 bytes (0x115E)
+//	    - Data: ASCII string "fingerprintx"
 //
 // Returns:
-//   []byte: Properly formatted EXCSAT message ready to send
+//
+//	[]byte: Properly formatted EXCSAT message ready to send
 func buildEXCSAT() []byte {
 	// Client external name (identifies us as "fingerprintx")
 	extnam := []byte("fingerprintx")
@@ -168,17 +170,17 @@ func buildEXCSAT() []byte {
 	msg := make([]byte, 0, totalLen)
 
 	// DDM Header (10 bytes)
-	msg = append(msg, byte(totalLen>>8), byte(totalLen))    // Length (big-endian)
-	msg = append(msg, DDM_MAGIC)                            // Magic (0xD0)
-	msg = append(msg, 0x01)                                 // Format (chained DSS, RQSDSS)
-	msg = append(msg, byte(EXCSAT>>8&0xFF), byte(EXCSAT&0xFF))        // Codepoint (0x1041)
-	msg = append(msg, 0x00, 0x01)                           // Correlation ID
-	lengthParam := totalLen - 6                             // Length2 (per DRDA spec)
+	msg = append(msg, byte(totalLen>>8), byte(totalLen))       // Length (big-endian)
+	msg = append(msg, DDM_MAGIC)                               // Magic (0xD0)
+	msg = append(msg, 0x01)                                    // Format (chained DSS, RQSDSS)
+	msg = append(msg, byte(EXCSAT>>8&0xFF), byte(EXCSAT&0xFF)) // Codepoint (0x1041)
+	msg = append(msg, 0x00, 0x01)                              // Correlation ID
+	lengthParam := totalLen - 6                                // Length2 (per DRDA spec)
 	msg = append(msg, byte(lengthParam>>8), byte(lengthParam))
 
 	// EXTNAM parameter
 	msg = append(msg, byte(extnameParamLen>>8), byte(extnameParamLen)) // Param length
-	msg = append(msg, byte(EXTNAM>>8&0xFF), byte(EXTNAM&0xFF))                   // Param codepoint (0x115E)
+	msg = append(msg, byte(EXTNAM>>8&0xFF), byte(EXTNAM&0xFF))         // Param codepoint (0x115E)
 	msg = append(msg, extnam...)                                       // Param data
 
 	return msg
@@ -240,9 +242,10 @@ func checkDDMResponse(response []byte, expectedCodepoint uint16) (bool, error) {
 // extractParameter extracts a parameter value from a DDM message by codepoint.
 //
 // DDM messages contain zero or more parameters, each with this structure:
-//   Offset 0-1: Parameter length (big-endian, includes length field + codepoint)
-//   Offset 2-3: Parameter codepoint (big-endian, identifies parameter type)
-//   Offset 4+:  Parameter data
+//
+//	Offset 0-1: Parameter length (big-endian, includes length field + codepoint)
+//	Offset 2-3: Parameter codepoint (big-endian, identifies parameter type)
+//	Offset 4+:  Parameter data
 //
 // Parameters:
 //   - response: DDM message bytes (starting from first parameter, skip 10-byte header)
@@ -317,14 +320,16 @@ func extractEXTNAM(response []byte) string {
 // extractSRVRLSLV extracts the SRVRLSLV (Server Release Level) parameter.
 //
 // SRVRLSLV contains an encoded version string in format "SQLvvrrm" where:
-//   vv = Major version (2 digits)
-//   rr = Minor version (2 digits)
-//   m  = Modification level (1+ digits)
+//
+//	vv = Major version (2 digits)
+//	rr = Minor version (2 digits)
+//	m  = Modification level (1+ digits)
 //
 // Examples:
-//   "SQL11056" → 11.5.6
-//   "SQL10050" → 10.5.0
-//   "SQL09074" → 9.7.4
+//
+//	"SQL11056" → 11.5.6
+//	"SQL10050" → 10.5.0
+//	"SQL09074" → 9.7.4
 //
 // Parameters:
 //   - response: EXCSATRD response bytes
@@ -362,8 +367,9 @@ func extractServerName(response []byte) string {
 // We use regex to extract the numeric version portion.
 //
 // Examples:
-//   "DB2/LINUXX8664 11.5.6.0" → "11.5.6.0"
-//   "DB2 for z/OS 12.1.0" → "12.1.0"
+//
+//	"DB2/LINUXX8664 11.5.6.0" → "11.5.6.0"
+//	"DB2 for z/OS 12.1.0" → "12.1.0"
 //
 // Parameters:
 //   - extnam: EXTNAM string value
@@ -383,9 +389,10 @@ func parseEXTNAMVersion(extnam string) string {
 // Format: "SQLvvrrm" where vv=major, rr=minor, m=modification
 //
 // Examples:
-//   "SQL11056" → "11.5.6"
-//   "SQL10050" → "10.5.0"
-//   "SQL09074" → "9.7.4"
+//
+//	"SQL11056" → "11.5.6"
+//	"SQL10050" → "10.5.0"
+//	"SQL09074" → "9.7.4"
 //
 // Parameters:
 //   - srvrlslv: SRVRLSLV string value
@@ -588,5 +595,5 @@ func (p *DB2Plugin) Type() plugins.Protocol {
 }
 
 func (p *DB2Plugin) Priority() int {
-	return 120
+	return 340
 }

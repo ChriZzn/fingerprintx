@@ -54,7 +54,7 @@ func (p *Plugin) Name() string {
 }
 
 func (p *Plugin) Priority() int {
-	return 200
+	return 300
 }
 
 func (p *Plugin) Type() plugins.Protocol {

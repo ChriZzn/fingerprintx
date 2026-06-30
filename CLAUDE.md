@@ -63,7 +63,7 @@ Originally forked from [Praetorian Security's fingerprintx](https://github.com/p
 **Key design decisions:**
 - Plugin-based architecture — each protocol is a self-contained plugin
 - TLS-first connection strategy — always tries TLS before raw TCP
-- Sequential scanning (concurrency was removed intentionally)
+- Sequential scanning by default; opt-in target-level concurrency via `Config.Concurrency` / `-c` (default 1 = sequential)
 - Usable both as a CLI tool and as a Go library
 
 **License:** Apache 2.0
@@ -146,7 +146,8 @@ fingerprintx/
 CLI: main() → runner.Execute() → readTargets() → scan.Scan() → Report()
 Lib: scan.Scan(targets, config)
 
-scan.Scan() iterates targets sequentially:
+scan.Scan() fans targets across Config.Concurrency workers (default 1 = sequential),
+preserving input order in the results:
   → config.RunTargetScan(target)
     → NewPluginMatrix() (sorts plugins by priority)
     → FastMode: GetPluginByTarget(port) → single plugin
@@ -174,7 +175,7 @@ type Plugin interface {
 - **`Target`** — `{Address: netip.AddrPort, Host: string, Transport: Protocol}`
 - **`Service`** — Result: `{Host, IP, Port, Protocol, Transport, SSL, Metadata}`
 - **`FingerprintConn`** — Wraps `net.Conn`, adds `TLS()` and `Upgrade()` methods
-- **`scan.Config`** — `{FastMode, FallBack, DefaultTimeout, Verbose}`
+- **`scan.Config`** — `{Ctx, FastMode, FallBack, DefaultTimeout, Concurrency, Verbose}`
 - **`PluginMatrix`** — Holds TCP/UDP plugin lists sorted by priority
 
 ### Plugin Registration
@@ -245,6 +246,7 @@ Flags:
   -b, --fallback           Return "unknown" if no service matched
   -v, --verbose            Verbose logging to stderr
   -w, --timeout int        Timeout in milliseconds (default 2000)
+  -c, --concurrency int    Targets scanned in parallel (default 1 = sequential)
 
 Subcommands:
   plugins                  List all available plugins with priority/ports
@@ -443,7 +445,7 @@ For protocols with STARTTLS (SMTP, POP3, IMAP, LDAP), use `conn.Upgrade()` to up
 
 ## Gotchas
 
-- **No concurrency** — targets are scanned sequentially. This is intentional.
+- **Concurrency is opt-in** — targets are scanned sequentially by default (`Concurrency`/`-c` = 1). Set `-c N` to fingerprint N targets in parallel; each target is still scanned in full by a single worker. Results keep input order. Plugins are stateless singletons, so this is race-free (verified with `go test -race ./pkg/scan/`).
 - **BruteForce mode opens a new connection per plugin** — each plugin attempt gets a fresh `Connect()` call.
 - **TLS is tried first** on every connection, even for known plaintext ports. This is by design (detects unexpected TLS).
 - **`plugin_list.go` must be updated** when adding a new plugin, or it won't be registered.

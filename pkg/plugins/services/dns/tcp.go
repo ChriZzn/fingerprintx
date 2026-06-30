@@ -31,7 +31,7 @@ func (p *TCPPlugin) Type() plugins.Protocol {
 }
 
 func (p *TCPPlugin) Priority() int {
-	return 50
+	return 60
 }
 
 func (p *TCPPlugin) Ports() []uint16 {

@@ -22,6 +22,7 @@ type cliConfig struct {
 	fastMode        bool
 	fallBack        bool
 	timeout         int
+	concurrency     int
 	verbose         bool
 	showErrors      bool
 }

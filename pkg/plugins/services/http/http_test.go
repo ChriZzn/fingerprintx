@@ -20,7 +20,6 @@ import (
 	"github.com/chrizzn/fingerprintx/pkg/plugins"
 	"github.com/chrizzn/fingerprintx/pkg/test"
 	"github.com/ory/dockertest/v3"
-	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 )
 
 func TestHTTP(t *testing.T) {
@@ -40,11 +39,6 @@ func TestHTTP(t *testing.T) {
 	}
 
 	p := Plugin{}
-	wappalyzerClient, err := wappalyzer.New()
-	if err != nil {
-		panic("unable to initialize wappalyzer library")
-	}
-	p.wappalyzer = wappalyzerClient
 
 	for _, tc := range testcases {
 		tc := tc

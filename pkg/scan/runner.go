@@ -35,8 +35,9 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 
 	}
 
-	// Bruteforce until the service is found
-	for _, plugin := range pluginMatrix.GetPluginsByTransport(target.Transport) {
+	// Bruteforce until the service is found. Plugins owning the target port are
+	// tried first, then the rest by priority.
+	for _, plugin := range pluginMatrix.GetPluginsByTargetPriority(target) {
 		// Check for cancellation before each plugin attempt
 		select {
 		case <-c.Ctx.Done():
@@ -62,7 +63,10 @@ func (c *Config) RunTargetScan(target plugins.Target) (*plugins.Service, error) 
 	}
 
 	if c.FallBack == true {
-		conn, _ := plugins.Connect(c.Ctx, target, c.DefaultTimeout)
+		conn, err := plugins.Connect(c.Ctx, target, c.DefaultTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("error connecting to target, err = %w", err)
+		}
 		return fallback(target, conn)
 	}
 

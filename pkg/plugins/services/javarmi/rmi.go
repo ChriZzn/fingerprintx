@@ -306,5 +306,5 @@ func (p *RMIPlugin) Type() plugins.Protocol {
 // Returns 500 (medium priority) as RMI should run after protocol-specific
 // checks but before generic HTTP probes
 func (p *RMIPlugin) Priority() int {
-	return 500
+	return 290
 }

@@ -66,7 +66,7 @@ const (
 
 // Protocol constants
 const (
-	SYBASE      = "sybase"
+	SYBASE       = "sybase"
 	DEFAULT_PORT = 5000
 )
 
@@ -117,7 +117,7 @@ func (p *SybasePlugin) Type() plugins.Protocol {
 
 // Priority returns the execution priority (145 = after MSSQL 143, before generic)
 func (p *SybasePlugin) Priority() int {
-	return 145
+	return 400
 }
 
 // Ports returns the default port for Sybase ASE (5000)
@@ -155,8 +155,8 @@ func DetectSybase(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 		0x01,       // Status: EOM (End of Message)
 		0x00, 0x58, // Length: 88 bytes
 		0x00, 0x00, // SPID: 0
-		0x01,       // PacketID: 1
-		0x00,       // Window: 0
+		0x01, // PacketID: 1
+		0x00, // Window: 0
 
 		// Pre-Login Request Body - Option Tokens
 		// VERSION option
@@ -193,10 +193,10 @@ func DetectSybase(conn net.Conn, timeout time.Duration) (Data, bool, error) {
 
 		// PLOptionData (values for all options)
 		0x11, 0x09, 0x00, 0x01, 0x00, 0x00, // VERSION data
-		0x00,                               // ENCRYPTION data
-		0x00,                               // INSTOPT data
-		0x00, 0x00, 0x00, 0x00,             // THREADID data
-		0x00,                               // MARS data
+		0x00,                   // ENCRYPTION data
+		0x00,                   // INSTOPT data
+		0x00, 0x00, 0x00, 0x00, // THREADID data
+		0x00, // MARS data
 		// TRACEID data (36 bytes)
 		0xF9, 0xB8, 0xCB, 0x5C, 0x94, 0x6B, 0x89, 0x1F,
 		0xD9, 0xAA, 0x3C, 0x13, 0x4B, 0xD0, 0x7B, 0x88,

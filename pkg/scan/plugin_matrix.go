@@ -67,6 +67,26 @@ func (pm *PluginMatrix) GetPluginByTarget(target plugins.Target) plugins.Plugin 
 	return nil
 }
 
+// GetPluginsByTargetPriority returns plugins for the target's transport, with any
+// plugin that owns the target port moved to the front (preserving priority order
+// among matches). This makes brute-force mode try the port's expected service first
+// while still falling through to every other plugin if it doesn't match.
+func (pm *PluginMatrix) GetPluginsByTargetPriority(target plugins.Target) []plugins.Plugin {
+	all := pm.GetPluginsByTransport(target.Transport)
+	port := target.Address.Port()
+
+	ordered := make([]plugins.Plugin, 0, len(all))
+	rest := make([]plugins.Plugin, 0, len(all))
+	for _, plugin := range all {
+		if slices.Contains(plugin.Ports(), port) {
+			ordered = append(ordered, plugin)
+		} else {
+			rest = append(rest, plugin)
+		}
+	}
+	return append(ordered, rest...)
+}
+
 // GetPluginsByTransport retrieves a list of plugins based on the specified transport protocol (TCP or UDP).
 func (pm *PluginMatrix) GetPluginsByTransport(transport plugins.Protocol) []plugins.Plugin {
 	if transport == plugins.TCP {

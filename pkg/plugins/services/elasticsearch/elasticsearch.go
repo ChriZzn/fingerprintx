@@ -70,9 +70,9 @@ Version Compatibility:
 */
 
 const (
-	ELASTICSEARCH         = "elasticsearch"
+	ELASTICSEARCH            = "elasticsearch"
 	DefaultElasticsearchPort = 9200
-	ElasticsearchTagline  = "You Know, for Search"
+	ElasticsearchTagline     = "You Know, for Search"
 )
 
 // elasticsearchRootResponse represents the JSON response from Elasticsearch root endpoint
@@ -217,5 +217,5 @@ func (p *ElasticsearchPlugin) Type() plugins.Protocol {
 }
 
 func (p *ElasticsearchPlugin) Priority() int {
-	return 100
+	return 220
 }

@@ -85,20 +85,20 @@ CPE Format:
 */
 
 const (
-	DIAMETER           = "diameter"
-	DIAMETER_PORT      = 3868
-	DIAMETER_VERSION   = 1
-	CER_COMMAND_CODE   = 257
-	R_BIT              = 0x80 // Request bit
-	DIAMETER_SUCCESS   = 2001
-	AVP_RESULT_CODE    = 268
-	AVP_ORIGIN_HOST    = 264
-	AVP_ORIGIN_REALM   = 296
-	AVP_HOST_IP_ADDR   = 257
-	AVP_VENDOR_ID      = 266
-	AVP_PRODUCT_NAME   = 269
-	AVP_FIRMWARE_REV   = 267
-	M_BIT              = 0x40 // Mandatory bit
+	DIAMETER         = "diameter"
+	DIAMETER_PORT    = 3868
+	DIAMETER_VERSION = 1
+	CER_COMMAND_CODE = 257
+	R_BIT            = 0x80 // Request bit
+	DIAMETER_SUCCESS = 2001
+	AVP_RESULT_CODE  = 268
+	AVP_ORIGIN_HOST  = 264
+	AVP_ORIGIN_REALM = 296
+	AVP_HOST_IP_ADDR = 257
+	AVP_VENDOR_ID    = 266
+	AVP_PRODUCT_NAME = 269
+	AVP_FIRMWARE_REV = 267
+	M_BIT            = 0x40 // Mandatory bit
 )
 
 type DIAMETERPlugin struct{}
@@ -164,7 +164,7 @@ func (p *DIAMETERPlugin) Type() plugins.Protocol {
 // Priority returns the plugin execution priority
 // Diameter uses port 3868 exclusively, run at medium priority (after common services)
 func (p *DIAMETERPlugin) Priority() int {
-	return 60
+	return 440
 }
 
 // detectDiameter sends a CER message and validates the CEA response

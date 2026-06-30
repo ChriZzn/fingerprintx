@@ -15,53 +15,56 @@
 /*
 Package memcached implements fingerprinting for Memcached distributed memory cache servers.
 
-Memcached Wire Protocol Detection
+# Memcached Wire Protocol Detection
 
 This plugin implements Memcached fingerprinting using the text (ASCII) protocol
 to ensure compatibility across all Memcached versions from 1.4.x to 1.6.x+.
 
 Detection Strategy:
-  PHASE 1 - DETECTION (determines if the service is Memcached):
-    PRIMARY PATH: version command
-      - Send: version\r\n
-      - Expected: VERSION <version>\r\n
-      - Works on ALL Memcached versions (1.0+ to 1.6.x+)
-      - Directly provides version string (100% confidence)
 
-    SECONDARY PATH (FALLBACK): stats command
-      - Send: stats\r\n
-      - Expected: STAT <key> <value>\r\n ... END\r\n
-      - Contains "STAT version <version>" line
-      - Works on ALL Memcached versions
+	PHASE 1 - DETECTION (determines if the service is Memcached):
+	  PRIMARY PATH: version command
+	    - Send: version\r\n
+	    - Expected: VERSION <version>\r\n
+	    - Works on ALL Memcached versions (1.0+ to 1.6.x+)
+	    - Directly provides version string (100% confidence)
 
-  PHASE 2 - ENRICHMENT (extracts version information):
-    After Memcached is detected, version is already extracted from the detection response.
-    No additional enrichment needed (unlike Redis INFO or MongoDB buildInfo).
+	  SECONDARY PATH (FALLBACK): stats command
+	    - Send: stats\r\n
+	    - Expected: STAT <key> <value>\r\n ... END\r\n
+	    - Contains "STAT version <version>" line
+	    - Works on ALL Memcached versions
+
+	PHASE 2 - ENRICHMENT (extracts version information):
+	  After Memcached is detected, version is already extracted from the detection response.
+	  No additional enrichment needed (unlike Redis INFO or MongoDB buildInfo).
 
 Memcached Text Protocol:
 
 version Command:
-  Request:  version\r\n
-  Response: VERSION <version>\r\n
 
-  Example:
-    Request:  version\r\n
-    Response: VERSION 1.6.22\r\n
+	Request:  version\r\n
+	Response: VERSION <version>\r\n
+
+	Example:
+	  Request:  version\r\n
+	  Response: VERSION 1.6.22\r\n
 
 stats Command (Fallback):
-  Request:  stats\r\n
-  Response: STAT <name> <value>\r\n
-            STAT <name> <value>\r\n
-            ...
-            END\r\n
 
-  Example:
-    Request:  stats\r\n
-    Response: STAT pid 1162\r\n
-              STAT uptime 5022\r\n
-              STAT version 1.6.22\r\n
-              ...
-              END\r\n
+	Request:  stats\r\n
+	Response: STAT <name> <value>\r\n
+	          STAT <name> <value>\r\n
+	          ...
+	          END\r\n
+
+	Example:
+	  Request:  stats\r\n
+	  Response: STAT pid 1162\r\n
+	            STAT uptime 5022\r\n
+	            STAT version 1.6.22\r\n
+	            ...
+	            END\r\n
 
 Error Responses:
   - ERROR\r\n - Unknown command (indicates NOT Memcached)
@@ -267,8 +270,8 @@ func buildMemcachedCPE(version string) string {
 // Detection Strategy:
 //  1. DETECTION PHASE: Use version command to detect Memcached and extract version
 //     - PRIMARY PATH: Send "version\r\n" command
-//       Works on ALL Memcached versions (1.0+ to 1.6.x+)
-//       Directly provides version string (100% confidence)
+//     Works on ALL Memcached versions (1.0+ to 1.6.x+)
+//     Directly provides version string (100% confidence)
 //  2. FALLBACK: If version command fails, try stats command
 //     - Send "stats\r\n" command
 //     - Extract version from "STAT version <version>" line
@@ -356,5 +359,5 @@ func (p *MEMCACHEDPlugin) Type() plugins.Protocol {
 }
 
 func (p *MEMCACHEDPlugin) Priority() int {
-	return 100
+	return 240
 }

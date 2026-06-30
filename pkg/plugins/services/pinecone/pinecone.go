@@ -52,8 +52,8 @@ const (
 	USERAGENT     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
 
 	// Header constants for detection
-	HEADER_API_VERSION      = "X-Pinecone-Api-Version"
-	HEADER_AUTH_REJECTED    = "X-Pinecone-Auth-Rejected-Reason"
+	HEADER_API_VERSION   = "X-Pinecone-Api-Version"
+	HEADER_AUTH_REJECTED = "X-Pinecone-Auth-Rejected-Reason"
 )
 
 func init() {
@@ -172,7 +172,7 @@ func (p *PINECONEPlugin) Type() plugins.Protocol {
 //   - Database protocols run first (MongoDB -1, MySQL 0, etc.)
 //   - Generic HTTP/HTTPS run last as catch-all
 func (p *PINECONEPlugin) Priority() int {
-	return 50
+	return 450
 }
 
 // Ports returns the default port for Pinecone (443, HTTPS).

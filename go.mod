@@ -8,7 +8,6 @@ require (
 	github.com/ChriZzn/sslx v1.0.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/ory/dockertest/v3 v3.12.0
-	github.com/projectdiscovery/wappalyzergo v0.2.17
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.10.0
@@ -23,7 +22,6 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
-	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

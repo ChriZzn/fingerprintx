@@ -360,5 +360,5 @@ func (p *ChromaDBPlugin) Type() plugins.Protocol {
 }
 
 func (p *ChromaDBPlugin) Priority() int {
-	return 50 // Run before generic HTTP (100), after highly specific protocols
+	return 370
 }

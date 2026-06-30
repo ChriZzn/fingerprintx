@@ -400,5 +400,5 @@ func (p *MilvusPlugin) Type() plugins.Protocol {
 }
 
 func (p *MilvusPlugin) Priority() int {
-	return 50 // Run before generic HTTP (100)
+	return 380
 }

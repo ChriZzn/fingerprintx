@@ -97,6 +97,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
 	rootCmd.PersistentFlags().
 		IntVarP(&config.timeout, "timeout", "w", 2000, "timeout (milliseconds)")
+	rootCmd.PersistentFlags().
+		IntVarP(&config.concurrency, "concurrency", "c", 1, "number of targets to scan in parallel (1 = sequential)")
 }
 
 func Execute() {
