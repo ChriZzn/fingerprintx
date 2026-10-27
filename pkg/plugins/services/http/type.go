@@ -4,6 +4,7 @@ type ServiceHTTP struct {
 	Server  string   `json:"server,omitempty"`
 	Status  int      `json:"status,omitempty"`
 	Title   string   `json:"title,omitempty"`
+	CPEs    []string `json:"cpes,omitempty"`
 	Favicon Favicon  `json:"favicon,omitempty"`
 	Headers []Header `json:"headers,omitempty"`
 }

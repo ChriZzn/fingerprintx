@@ -121,6 +121,9 @@ func (p *Plugin) Run(conn *plugins.FingerprintConn, timeout time.Duration, targe
 		service.Title = title
 	}
 
+	// CPEs (passive: reuses the response above, no extra requests)
+	service.CPEs = ExtractCPEs(resp.Header, body)
+
 	// Favicon
 	service.Favicon = GetFavicon(baseURL, body)
 
